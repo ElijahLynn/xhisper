@@ -72,6 +72,9 @@ silence_threshold=-50
 silence_percentage=95
 non_ascii_initial_delay=0.1
 non_ascii_default_delay=0.025
+# Microseconds to pause after each ASCII key. Default matches built-in speed;
+# raise it only if a target app drops keys (e.g. Warp under GPU load).
+type_key_gap=2000
 
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/xhisper/xhisperrc"
 
@@ -92,6 +95,7 @@ if [ -f "$CONFIG_FILE" ]; then
       silence-percentage) silence_percentage="$value" ;;
       non-ascii-initial-delay) non_ascii_initial_delay="$value" ;;
       non-ascii-default-delay) non_ascii_default_delay="$value" ;;
+      type-key-gap) type_key_gap="$value" ;;
     esac
   done < "$CONFIG_FILE"
 fi
@@ -147,7 +151,7 @@ paste() {
 
     if [[ $ascii -ge 32 && $ascii -le 126 ]]; then
       # ASCII printable character - use direct key typing (faster)
-      "$XHISPERTOOL" type "$char"
+      "$XHISPERTOOL" type "$char" "$type_key_gap"
     else
       # Unicode or special character - use clipboard
       echo -n "$char" | $CLIP_COPY

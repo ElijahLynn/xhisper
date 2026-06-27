@@ -28,7 +28,7 @@
 void cleanup(void);
 void emit(int type, int code, int val);
 void do_paste(void);
-void type_char(unsigned char c);
+void type_char(unsigned char c, int gap);
 void do_backspace(void);
 void do_key(int keycode);
 int setup_uinput(void);
@@ -152,7 +152,9 @@ void do_paste() {
     emit(EV_SYN, SYN_REPORT, 0);
 }
 
-void type_char(unsigned char c) {
+// gap = microseconds to wait after the key is released, before the next key.
+// Raise it for consumers that drop fast synthetic events (e.g. Warp under GPU load).
+void type_char(unsigned char c, int gap) {
     if (c >= 128) return;
 
     int32_t kdef = ascii2keycode_map[c];
@@ -172,7 +174,7 @@ void type_char(unsigned char c) {
 
     emit(EV_KEY, keycode, 0);
     emit(EV_SYN, SYN_REPORT, 0);
-    usleep(2000);
+    usleep(gap);
 
     if (kdef & FLAG_UPPERCASE) {
         emit(EV_KEY, KEY_LEFTSHIFT, 0);
@@ -297,15 +299,19 @@ int run_daemon() {
 
     printf("xhispertoold: listening on @xhisper_socket\n");
 
-    char buf[2];
+    char buf[4];
     while (1) {
         ssize_t n = recv(fd_socket, buf, sizeof(buf), 0);
         if (n >= 1) {
             char cmd = buf[0];
             if (cmd == 'p') {
                 do_paste();
-            } else if (cmd == 't' && n == 2) {
-                type_char((unsigned char)buf[1]);
+            } else if (cmd == 't' && n >= 2) {
+                // Optional trailing 2 bytes = inter-key gap (us, LE); else default.
+                int gap = (n >= 4)
+                    ? ((unsigned char)buf[2] | ((unsigned char)buf[3] << 8))
+                    : 2000;
+                type_char((unsigned char)buf[1], gap);
             } else if (cmd == 'b') {
                 do_backspace();
             } else if (cmd == 'r') {
@@ -334,7 +340,7 @@ void show_usage() {
     fprintf(stderr,
         "Usage:\n"
         "  xhispertool paste            - Paste from clipboard (Ctrl+V)\n"
-        "  xhispertool type <char>      - Type a single ASCII character\n"
+        "  xhispertool type <char> [gap_us] - Type one ASCII char (optional gap)\n"
         "  xhispertool backspace        - Press backspace\n"
         "\n"
         "Input switching keys:\n"
@@ -387,7 +393,7 @@ int run_client(int argc, char *argv[]) {
         return 2;
     }
 
-    char buf[2];
+    char buf[4];
     ssize_t len = 0;
 
     if (strcmp(argv[1], "paste") == 0) {
@@ -418,8 +424,8 @@ int run_client(int argc, char *argv[]) {
         buf[0] = 'M';
         len = 1;
     } else if (strcmp(argv[1], "type") == 0) {
-        if (argc != 3 || strlen(argv[2]) != 1) {
-            fprintf(stderr, "Error: 'type' requires exactly one character argument\n");
+        if ((argc != 3 && argc != 4) || strlen(argv[2]) != 1) {
+            fprintf(stderr, "Error: 'type' requires <char> [gap_us]\n");
             show_usage();
             close(fd);
             return 1;
@@ -427,6 +433,14 @@ int run_client(int argc, char *argv[]) {
         buf[0] = 't';
         buf[1] = argv[2][0];
         len = 2;
+        if (argc == 4) {
+            int gap = atoi(argv[3]);
+            if (gap < 0) gap = 0;
+            if (gap > 65535) gap = 65535;
+            buf[2] = gap & 0xff;
+            buf[3] = (gap >> 8) & 0xff;
+            len = 4;
+        }
     } else {
         fprintf(stderr, "Error: Unknown command '%s'\n", argv[1]);
         show_usage();

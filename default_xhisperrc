@@ -10,6 +10,10 @@ transcription-prompt     : ""
 non-ascii-initial-delay : 0.15 # Increase this if first character comes out wrong.
 non-ascii-default-delay : 0.025
 
+# ASCII key gap (microseconds after each key). Default matches built-in speed.
+# Raise only if a target app drops keys (e.g. Warp pegs the GPU and drops spaces).
+type-key-gap : 2000
+
 # Silence Detection:
 silence-threshold  : -50
 silence-percentage : 95
