@@ -122,7 +122,8 @@ if ! command -v "$XHISPERTOOL" &> /dev/null; then
     exit 1
 fi
 
-# Detect clipboard tool
+# Detect clipboard tool (only needed for non-ASCII text; error is deferred
+# to paste() so ASCII-only dictation still works without one installed)
 if command -v wl-copy &> /dev/null; then
     CLIP_COPY="wl-copy"
     CLIP_PASTE="wl-paste"
@@ -130,8 +131,8 @@ elif command -v xclip &> /dev/null; then
     CLIP_COPY() { xclip -selection clipboard; }
     CLIP_PASTE() { xclip -o -selection clipboard; }
 else
-    echo "Error: No clipboard tool found. Install wl-clipboard or xclip." >&2
-    exit 1
+    CLIP_COPY=""
+    CLIP_PASTE=""
 fi
 
 press_wrap_key() {
@@ -154,6 +155,10 @@ paste() {
       "$XHISPERTOOL" type "$char" "$type_key_gap"
     else
       # Unicode or special character - use clipboard
+      if [ -z "$CLIP_COPY" ]; then
+        echo "Error: No clipboard tool found. Install wl-clipboard or xclip to paste non-ASCII text." >&2
+        return 1
+      fi
       echo -n "$char" | $CLIP_COPY
       "$XHISPERTOOL" paste
       # On first character (more error-prone), sleep longer
