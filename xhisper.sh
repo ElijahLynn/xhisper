@@ -53,9 +53,11 @@ if [ "$LOCAL_MODE" -eq 1 ]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   XHISPERTOOL="$SCRIPT_DIR/xhispertool"
   XHISPERTOOLD="$SCRIPT_DIR/xhispertoold"
+  XHISPERCLIP="$SCRIPT_DIR/xhisperclip"
 else
   XHISPERTOOL="${XHISPERTOOL:-xhispertool}"     # env overrides are for tests
   XHISPERTOOLD="${XHISPERTOOLD:-xhispertoold}"
+  XHISPERCLIP="${XHISPERCLIP:-xhisperclip}"
 fi
 
 RECORDING="$RUNTIME_DIR/xhisper.wav"
@@ -228,7 +230,8 @@ remember_x11_app() {
   mkdir -p "${X11_APPS_FILE%/*}" && echo "$FOCUS_CLASS" >> "$X11_APPS_FILE"
 }
 # The transcription is marked sensitive (KDE password-manager hint, which clipboard
-# history tools honour) so dictations don't pile up in clipboard history.
+# history tools honour) so dictations don't pile up in clipboard history. On the X11
+# path xhisperclip adds the hint (xclip can't); plain xclip is the last resort.
 clip_set() {
   local text="$1"
   if [ "$CLIP_XCLIP_ONLY" -eq 0 ] && command -v wl-copy >/dev/null 2>&1 &&
@@ -236,6 +239,11 @@ clip_set() {
     return 0
   fi
   [ "$CLIP_XCLIP_ONLY" -eq 0 ] && remember_x11_app
+  if command -v "$XHISPERCLIP" >/dev/null 2>&1 &&
+     printf '%s' "$text" | timeout 0.5 "$XHISPERCLIP" 2>/dev/null; then
+    return 0
+  fi
+  echo "=== paste mode: xhisperclip unavailable; dictation may enter clipboard history ===" >> "$LOGFILE"
   command -v xclip >/dev/null 2>&1 &&
     printf '%s' "$text" | timeout 0.5 xclip -selection clipboard -i 2>/dev/null
 }

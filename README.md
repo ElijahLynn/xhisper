@@ -29,7 +29,9 @@ sudo dnf install pipewire-utils jq curl ffmpeg gcc wl-clipboard xclip libnotify
 ```
 
 `xclip` is needed even on Wayland: the Wayland clipboard tools fail while an X11
-(XWayland) app such as Warp has focus, and xhisper falls back to `xclip` then.
+(XWayland) app such as Warp has focus, and xhisper falls back to X11 then. Building
+the `xhisperclip` helper needs the libX11 headers (`libx11-dev` on Debian/Ubuntu,
+`libX11-devel` on Fedora; included with `libx11` on Arch).
 
 ### 2. Access to `/dev/uinput`
 
@@ -142,8 +144,9 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
 - Your clipboard is saved before the paste and restored right after, whatever it
   held (text, image, anything). If it was empty, it's cleared again.
 - The transcription is copied with the "sensitive" hint, so clipboard-history tools
-  that honor it don't record dictations. (Not possible through `xclip`, so dictations
-  into X11 apps can't carry the hint.)
+  that honor it (Strata, KDE Klipper, ...) don't record dictations. On the X11 path
+  the bundled `xhisperclip` helper sets the hint, since `xclip` can't; if it's
+  missing, xhisper falls back to `xclip` and dictations into X11 apps reach history.
 - Every clipboard call is time-limited, so a clipboard owner that never answers
   can't hang xhisper.
 - X11 (XWayland) apps such as Warp make the Wayland clipboard tools time out. The

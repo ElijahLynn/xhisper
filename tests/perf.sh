@@ -5,7 +5,7 @@
 #   wayland  GUI app: wl-copy/wl-paste in your real session (GNOME needs a keyboard
 #            seat for wl-copy, which a headless compositor doesn't have). xhisper
 #            saves and restores your clipboard; this test checks it's unchanged.
-#   x11      X11 app such as Warp: xclip against a private Xvfb server.
+#   x11      X11 app such as Warp: xhisperclip/xclip against a private Xvfb server.
 #
 # Nothing is ever pasted or typed: a stand-in xhispertool records when the paste key
 # would be sent. Fails if a path's median is over XHISPER_PERF_MAX_MS (500), or the
@@ -63,11 +63,13 @@ Xvfb ":$XNUM" -nolisten tcp >/dev/null 2>&1 &
 XVFB_PID=$!
 for _ in $(seq 50); do [ -e "/tmp/.X11-unix/X$XNUM" ] && break; sleep 0.05; done
 
-clipboard_fingerprint() {  # type list + content hash; never prints the content
+# Content hash only; never prints the content. Not the type list: a restore offers
+# the content under the types its tool offers (wl-copy and xclip differ), so the
+# list legitimately changes when the clipboard was last set by the other tool.
+clipboard_fingerprint() {
   local types; types=$(timeout 1 wl-paste --list-types 2>/dev/null) || { echo empty; return; }
   local t; t=$(printf '%s\n' "$types" | head -1)
-  printf '%s|%s' "$(printf '%s' "$types" | md5sum | cut -c1-8)" \
-    "$(timeout 1 wl-paste --no-newline --type "$t" 2>/dev/null | md5sum | cut -c1-8)"
+  timeout 1 wl-paste --no-newline --type "$t" 2>/dev/null | md5sum | cut -c1-8
 }
 
 # One dictation: returns "latency_ms key". $1 = path name.
@@ -88,7 +90,7 @@ run_once() {
 
   local t0=$EPOCHREALTIME
   env PATH="$W/bin:$PATH" DISPLAY=":$XNUM" XHISPER_RUNTIME_DIR="$W/rt" XHISPER_SKIP_DAEMON=1 \
-      XHISPERTOOL="$W/bin/xhispertool" XDG_CONFIG_HOME="$W/cfg" XDG_CACHE_HOME="$W/cache" \
+      XHISPERTOOL="$W/bin/xhispertool" XHISPERCLIP="$REPO/xhisperclip" XDG_CONFIG_HOME="$W/cfg" XDG_CACHE_HOME="$W/cache" \
       XHISPER_PERF_FOCUS="$focus" bash "$REPO/xhisper.sh" >/dev/null 2>&1
   local line; line=$(grep -m1 -E '^paste(shift)? ' "$W/keys") || { echo "FAIL nokey"; return; }
   local key=${line%% *} t1=${line##* }
