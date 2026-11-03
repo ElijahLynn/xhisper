@@ -74,7 +74,7 @@ right paste key. Details: [extension/README.md](extension/README.md).
 
 ### 6. Bind a key
 
-Bind `/usr/local/bin/xhisper` to any key. On GNOME, for example Caps Lock:
+Caps Lock is the hotkey: press it to start dictating, press it again to stop. On GNOME:
 
 ```sh
 name=xhisper; binding=Caps_Lock; action=/usr/local/bin/xhisper
@@ -87,6 +87,9 @@ gsettings set $media_keys.custom-keybinding:$kbd_path binding "$binding"
 gsettings set $media_keys.custom-keybinding:$kbd_path command "$action"
 ```
 
+Tip: if Caps Lock is ever ON when you aren't dictating (say, you pressed it while a
+system prompt was open), press **Shift+Caps Lock** once to put it back in step.
+
 Other setups:
 
 | Tool | Binding |
@@ -94,7 +97,6 @@ Other setups:
 | sway / i3 | `bindsym $mod+d exec xhisper` |
 | Hyprland | `bind = $mainMod, D, exec, xhisper` |
 | sxhkd | `super + d` → `xhisper` |
-| keyd | `capslock = layer(dictate)`, then `[dictate:C]` with `d = macro(xhisper)` |
 
 ## Use
 
