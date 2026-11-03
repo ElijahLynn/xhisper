@@ -210,34 +210,46 @@ CLIP_XCLIP_ONLY=0  # 1: skip the Wayland tools and use X11 straight away
 
 # The focused window, asked once per dictation from the indicator extension:
 # FOCUS is "('wm_class', 'app_id', 'client')", FOCUS_CLASS the wm_class and
-# FOCUS_CLIENT "x11" (XWayland window) or "wayland". Knowing the client up front
-# skips the Wayland tools' timeouts (~400 ms) in X11 apps. An older extension that
-# doesn't report the client: apps where the Wayland clipboard timed out before are
-# remembered in X11_APPS_FILE instead.
+# FOCUS_CLIENT "x11" (XWayland window) or "wayland" (empty with an older extension).
+# X11 windows go straight to the X11 clipboard. Some Wayland apps (Warp in Wayland
+# mode) still make the Wayland tools time out (~250 ms each); those are learned in
+# X11_APPS_FILE ("apps that need the X11 clipboard") after two timeouts in a row, so
+# a one-off hiccup doesn't flag an app for good. X11_PENDING_FILE holds first strikes.
 FOCUS=""; FOCUS_CLASS=""; FOCUS_CLIENT=""
 X11_APPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/xhisper/x11-apps"
+X11_PENDING_FILE="$X11_APPS_FILE.pending"
 focus_query() {
   FOCUS=$(timeout 0.2 gdbus call "${INDICATOR_DBUS[@]}" \
           --method io.github.elijahlynn.XhisperIndicator.FocusedWindow 2>/dev/null) || FOCUS=""
   [[ "$FOCUS" =~ ^\(\'([^\']*)\' ]] && FOCUS_CLASS="${BASH_REMATCH[1]}"
   [[ "$FOCUS" =~ \'(x11|wayland)\'\)$ ]] && FOCUS_CLIENT="${BASH_REMATCH[1]}"
-  case "$FOCUS_CLIENT" in
-    x11) CLIP_XCLIP_ONLY=1; return ;;
-    wayland) return ;;
-  esac
+  [ "$FOCUS_CLIENT" = x11 ] && { CLIP_XCLIP_ONLY=1; return; }
   local app
   if [ -n "$FOCUS_CLASS" ] && [ -f "$X11_APPS_FILE" ]; then
     while IFS= read -r app; do [ "$app" = "$FOCUS_CLASS" ] && CLIP_XCLIP_ONLY=1 && break; done < "$X11_APPS_FILE"
   fi
 }
-# A Wayland clipboard tool failed: use X11 for the rest of this dictation, and
-# remember the app only when the extension couldn't say what kind of window it is
-# (a known Wayland window just had a one-off hiccup).
+# A Wayland clipboard tool timed out: use X11 for the rest of this dictation. The
+# first strike for an app is noted in X11_PENDING_FILE, the second (in a row) moves
+# it to X11_APPS_FILE. Not for X11 windows: the extension already routes those.
 remember_x11_app() {
   CLIP_XCLIP_ONLY=1
-  [ -z "$FOCUS_CLIENT" ] && [ -n "$FOCUS_CLASS" ] || return 0
+  [ "$FOCUS_CLIENT" != x11 ] && [ -n "$FOCUS_CLASS" ] || return 0
   grep -qxF "$FOCUS_CLASS" "$X11_APPS_FILE" 2>/dev/null && return 0
-  mkdir -p "${X11_APPS_FILE%/*}" && echo "$FOCUS_CLASS" >> "$X11_APPS_FILE"
+  mkdir -p "${X11_APPS_FILE%/*}"
+  if grep -qxF "$FOCUS_CLASS" "$X11_PENDING_FILE" 2>/dev/null; then
+    echo "$FOCUS_CLASS" >> "$X11_APPS_FILE"
+    wayland_tools_ok
+  else
+    echo "$FOCUS_CLASS" >> "$X11_PENDING_FILE"
+  fi
+}
+# The Wayland tools answered in this app: clear its first strike, if any.
+wayland_tools_ok() {
+  [ -n "$FOCUS_CLASS" ] && [ -s "$X11_PENDING_FILE" ] || return 0
+  grep -qxF "$FOCUS_CLASS" "$X11_PENDING_FILE" || return 0
+  local rest; rest=$(grep -vxF "$FOCUS_CLASS" "$X11_PENDING_FILE")
+  printf '%s' "${rest:+$rest$'\n'}" > "$X11_PENDING_FILE"
 }
 # The transcription is marked sensitive (KDE password-manager hint, which clipboard
 # history tools honour) so dictations don't pile up in clipboard history. On the X11
@@ -308,6 +320,7 @@ clip_save() {
   local types rc
   if [ "$CLIP_XCLIP_ONLY" -eq 0 ] && command -v wl-paste >/dev/null 2>&1; then
     types=$(timeout 0.25 wl-paste --list-types 2>/dev/null); rc=$?
+    [ "$rc" -ne 124 ] && wayland_tools_ok
     if [ "$rc" -eq 0 ] && [ -n "$types" ]; then
       CLIP_TYPE=$(clip_pick_type "$types")
       CLIP_FILE=$(mktemp "$RUNTIME_DIR/xhisper-clip.XXXXXX")
@@ -316,7 +329,7 @@ clip_save() {
     elif [ "$rc" -ne 124 ]; then
       CLIP_STATE=empty; return 0  # answered quickly with nothing: "Nothing is copied"
     else
-      remember_x11_app  # timed out: an X11 window has focus
+      remember_x11_app  # timed out: X11 window, or an app such as Warp that blocks wl-paste
     fi
   fi
   # wl-paste fails while an X11 window has focus; ask the X11 clipboard instead.

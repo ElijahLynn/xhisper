@@ -149,12 +149,12 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
   missing, xhisper falls back to `xclip` and dictations into X11 apps reach history.
 - Every clipboard call is time-limited, so a clipboard owner that never answers
   can't hang xhisper.
-- X11 (XWayland) apps such as Warp make the Wayland clipboard tools time out. The
-  indicator extension tells xhisper whether the focused window is X11 or Wayland,
-  so X11 apps go straight to the X11 clipboard. Without the extension (or with an
-  extension loaded before this was added; log out and back in to reload it),
-  xhisper remembers apps where the Wayland tools timed out in
-  `~/.cache/xhisper/x11-apps` and uses X11 straight away for them from then on.
+- The Wayland clipboard tools time out in X11 (XWayland) windows, and in some
+  Wayland apps too (Warp, even in its Wayland mode). The indicator extension tells
+  xhisper whether the focused window is X11, so those go straight to the X11
+  clipboard. Other apps where the Wayland tools time out twice in a row are learned
+  in `~/.cache/xhisper/x11-apps` and use X11 straight away from then on (a single
+  timeout is just a hiccup). Delete a line there to make xhisper re-check an app.
 
 ## Troubleshooting
 
