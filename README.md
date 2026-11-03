@@ -3,7 +3,7 @@
 Push-to-dictate for Linux. Press a key, talk, press it again: your words appear at
 the cursor in whatever app has focus.
 
-- **Fast:** text appears about 0.8 s after you stop, transcribed by Groq's
+- **Fast:** text appears about 0.4–0.5 s after you stop, transcribed by Groq's
   `whisper-large-v3-turbo` (free tier available).
 - **Pastes, doesn't type:** the whole transcription lands in one paste, then your
   previous clipboard is put back.
@@ -173,18 +173,20 @@ focused window over D-Bus.
 ## Performance
 
 Each dictation logs a `Timing:` line. Typical numbers (Arch, GNOME 51, paste mode),
-with text appearing about 0.8 s after the second key press:
+measured from the second key press:
 
-| Step | Time |
-|---|---|
-| Script startup | ~150 ms |
-| Stop recording | ~140 ms |
-| Upload + Groq transcription | ~310 ms (upload itself is only ~10–25 ms; Groq processing ~200–300 ms) |
-| Clipboard + paste | ~160 ms |
+| Step | GUI app | Warp (X11) |
+|---|---|---|
+| Script startup | ~8 ms | ~8 ms |
+| Stop recording | ~23 ms | ~23 ms |
+| Upload + Groq transcription (silence check, focus lookup and clipboard save run in parallel) | ~300 ms | ~330 ms |
+| Clipboard + paste key | ~160 ms (`wl-copy` + 80 ms focus wait) | ~9 ms (`xclip`) |
+| **Text appears after** | **~0.47 s** | **~0.37 s** |
 
-Groq was the fastest provider tested; DeepInfra and Cloudflare Workers AI were 2–15×
-slower for the same audio. Compressing audio before upload doesn't help (encoding
-costs more than the upload it saves).
+Upload itself is only ~10–25 ms; Groq's processing (~200–300 ms) is most of the
+wait. Groq was the fastest provider tested; DeepInfra and Cloudflare Workers AI were
+2–15× slower for the same audio. Compressing audio before upload doesn't help
+(encoding costs more than the upload it saves).
 
 ### Next steps to make it feel local
 
@@ -192,13 +194,13 @@ costs more than the upload it saves).
    only the last phrase is pending when you stop. The only way to hide Groq's
    ~250 ms processing time. Groq has no streaming API, so this means phrase
    chunking.
-2. **Persistent daemon:** keep xhisper running and have the key signal it, removing
-   most of the ~150 ms startup and per-step process launches. Makes item 1 easier.
+2. **Persistent daemon:** keep xhisper running and have the key signal it. Startup is
+   already ~8 ms, so the main gain is making item 1 easier to build.
 3. **Warm HTTPS connection:** reuse one connection to Groq from the daemon (saves
    ~30 ms; only worth it with item 2).
 4. **Insert text without the clipboard:** e.g. commit text directly through the GNOME
-   extension or an input method. Removes ~160 ms and never touches your clipboard.
-5. **Event-driven stop:** wait on `pw-record`'s exit instead of polling.
+   extension or an input method. Removes the ~160 ms Wayland clipboard step in GUI
+   apps and never touches your clipboard.
 
 ## License
 
