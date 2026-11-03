@@ -1,0 +1,8 @@
+{
+  "uuid": "xhisper-indicator@elijahlynn.net",
+  "name": "xhisper Indicator",
+  "description": "On-screen recording indicator for xhisper push-to-dictate: a small animated level meter (or pulsing orb) at the bottom center of the screen, toggled over D-Bus. Never takes focus or input.",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "url": "https://github.com/ElijahLynn/xhisper",
+  "version": 1
+}
