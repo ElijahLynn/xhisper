@@ -28,4 +28,10 @@ uninstall:
 clean:
 	rm -f xhispertool xhispertoold test
 
-.PHONY: all install uninstall clean
+perf:
+	bash tests/perf.sh
+
+hooks:
+	git config core.hooksPath .githooks
+
+.PHONY: all install uninstall clean perf hooks

@@ -126,6 +126,7 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
 |---|---|---|
 | `insert-mode` | `paste` | `paste`: insert all at once via the clipboard, then restore it. `type`: send one key per character (slower; no clipboard use) |
 | `paste-key` | `auto` | `auto`: Ctrl+Shift+V in terminals, Ctrl+V elsewhere. Or force `ctrl+v` / `ctrl+shift+v` |
+| `min-latency` | `450` | Text never appears sooner than this many ms after the stop key press, so every app feels the same. `0` disables it |
 | `indicator-color` | `red` | `red`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `white` |
 | `indicator-style` | `meter` | `meter` (animated level bars) or `orb` (pulsing orb) |
 | `transcription-prompt` | *(empty)* | Optional context words for Whisper. Short is best: a long prompt can be echoed back instead of transcribed |
@@ -172,21 +173,40 @@ focused window over D-Bus.
 
 ## Performance
 
-Each dictation logs a `Timing:` line. Typical numbers (Arch, GNOME 51, paste mode),
-measured from the second key press:
+Goal: every dictation feels the same and lands within **0.5 s** of the stop key
+press, in any app. `min-latency` (450 ms) pads the faster path so a GUI app and a
+terminal feel identical.
 
-| Step | GUI app | Warp (X11) |
+Measured by `make perf` (median of 5 runs each, real Groq transcription):
+
+| Path | Median | What differs |
 |---|---|---|
-| Script startup | ~8 ms | ~8 ms |
-| Stop recording | ~23 ms | ~23 ms |
-| Upload + Groq transcription (silence check, focus lookup and clipboard save run in parallel) | ~300 ms | ~330 ms |
-| Clipboard + paste key | ~160 ms (`wl-copy` + 80 ms focus wait) | ~9 ms (`xclip`) |
-| **Text appears after** | **~0.47 s** | **~0.37 s** |
+| GUI app (Wayland clipboard) | ~480 ms | `wl-copy` + 40 ms for keyboard focus to return |
+| X11 app such as Warp (`xclip`) | ~472 ms | `xclip`, no focus wait; padded up to the floor |
 
-Upload itself is only ~10–25 ms; Groq's processing (~200–300 ms) is most of the
-wait. Groq was the fastest provider tested; DeepInfra and Cloudflare Workers AI were
-2–15× slower for the same audio. Compressing audio before upload doesn't help
-(encoding costs more than the upload it saves).
+Where the time goes before padding: startup ~8 ms, stopping the recorder ~20 ms,
+upload + Groq transcription ~300 ms (upload itself is only ~10–25 ms; the silence
+check, focus lookup and clipboard save run in parallel), clipboard ~10–90 ms. Groq
+was the fastest provider tested; DeepInfra and Cloudflare Workers AI were 2–15×
+slower. Compressing audio before upload doesn't help.
+
+### Performance gate
+
+`tests/perf.sh` runs the real script end to end against both clipboard paths and
+fails if either median exceeds 500 ms or the paths differ by more than 50 ms. It
+never pastes or types anything (a stand-in `xhispertool` records when the paste key
+would be sent). The X11 path runs against a private Xvfb server; the Wayland path
+uses your session's clipboard (GNOME's `wl-copy` needs a keyboard seat) and checks
+that your clipboard is unchanged afterwards. Needs `espeak-ng`, `xorg-server-xvfb`
+and a Groq key.
+
+```sh
+make perf     # run it
+make hooks    # once per clone: run it before every commit that touches the code
+```
+
+The pre-commit hook blocks commits that regress. Skip it once, deliberately, with
+`XHISPER_SKIP_PERF=1 git commit ...`.
 
 ### Next steps to make it feel local
 

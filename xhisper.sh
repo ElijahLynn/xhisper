@@ -4,7 +4,7 @@
 # transcribe with Groq Whisper and paste the text at the cursor.
 #
 # Settings: ~/.config/xhisper/xhisperrc (see default_xhisperrc and README.md):
-#   insert-mode, paste-key, indicator-color, indicator-style, transcription-prompt,
+#   insert-mode, paste-key, indicator-color, indicator-style, min-latency, transcription-prompt,
 #   long-recording-threshold, silence-threshold, type-key-gap,
 #   non-ascii-initial-delay, non-ascii-default-delay
 #
@@ -18,16 +18,18 @@ T0=$(date +%s%N)  # per-step timing, logged after each dictation
 # Parse command-line arguments
 LOCAL_MODE=0
 WRAP_KEY=""
+# Where recordings, logs and PID files live. Overridable so tests run isolated.
+RUNTIME_DIR="${XHISPER_RUNTIME_DIR:-/tmp}"
 for arg in "$@"; do
   case "$arg" in
     --local)
       LOCAL_MODE=1
       ;;
     --log)
-      if [ -f "/tmp/xhisper.log" ]; then
-        cat /tmp/xhisper.log
+      if [ -f "$RUNTIME_DIR/xhisper.log" ]; then
+        cat "$RUNTIME_DIR/xhisper.log"
       else
-        echo "No log file found at /tmp/xhisper.log" >&2
+        echo "No log file found at $RUNTIME_DIR/xhisper.log" >&2
       fi
       exit 0
       ;;
@@ -52,12 +54,12 @@ if [ "$LOCAL_MODE" -eq 1 ]; then
   XHISPERTOOL="$SCRIPT_DIR/xhispertool"
   XHISPERTOOLD="$SCRIPT_DIR/xhispertoold"
 else
-  XHISPERTOOL="xhispertool"
-  XHISPERTOOLD="xhispertoold"
+  XHISPERTOOL="${XHISPERTOOL:-xhispertool}"     # env overrides are for tests
+  XHISPERTOOLD="${XHISPERTOOLD:-xhispertoold}"
 fi
 
-RECORDING="/tmp/xhisper.wav"
-LOGFILE="/tmp/xhisper.log"
+RECORDING="$RUNTIME_DIR/xhisper.wav"
+LOGFILE="$RUNTIME_DIR/xhisper.log"
 
 # Default configuration
 long_recording_threshold=1000
@@ -74,6 +76,9 @@ insert_mode=paste
 paste_key=auto  # auto: ctrl+shift+v in terminals (needs the indicator extension), else ctrl+v
 indicator_color=red
 indicator_style=meter
+# Text never appears sooner than this many ms after the stop key press, so every
+# app (Wayland clipboard or xclip path) feels the same. 0 disables the floor.
+min_latency=450
 
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/xhisper/xhisperrc"
 
@@ -100,6 +105,7 @@ if [ -f "$CONFIG_FILE" ]; then
       paste-key) paste_key="$value" ;;
       indicator-color) indicator_color="$value" ;;
       indicator-style) indicator_style="$value" ;;
+      min-latency) min_latency="$value" ;;
     esac
   done < "$CONFIG_FILE"
 fi
@@ -115,17 +121,17 @@ pid_is() {  # pid name
 read_pid() { local pid; read -r pid < "$1" 2>/dev/null && echo "$pid"; }
 
 # Auto-start the key-sending daemon if it isn't running
-DAEMON_PID_FILE=/tmp/xhispertoold.pid
-if ! pid_is "$(read_pid "$DAEMON_PID_FILE")" xhispertoold; then
+DAEMON_PID_FILE="$RUNTIME_DIR/xhispertoold.pid"
+if [ -z "$XHISPER_SKIP_DAEMON" ] && ! pid_is "$(read_pid "$DAEMON_PID_FILE")" xhispertoold; then
   if pid=$(pgrep -x -n xhispertoold); then
     echo "$pid" > "$DAEMON_PID_FILE"  # started some other way; remember it
   else
-    "$XHISPERTOOLD" 2>> /tmp/xhispertoold.log &
+    "$XHISPERTOOLD" 2>> "$RUNTIME_DIR/xhispertoold.log" &
     echo $! > "$DAEMON_PID_FILE"
     sleep 1  # Give daemon time to start
-    if ! pid_is "$(read_pid "$DAEMON_PID_FILE")" xhispertoold; then
+    if [ -z "$XHISPER_SKIP_DAEMON" ] && ! pid_is "$(read_pid "$DAEMON_PID_FILE")" xhispertoold; then
       echo "Error: Failed to start xhispertoold daemon" >&2
-      echo "Check /tmp/xhispertoold.log for details" >&2
+      echo "Check $RUNTIME_DIR/xhispertoold.log for details" >&2
       exit 1
     fi
   fi
@@ -272,7 +278,7 @@ clip_stage() {
   fi
   # wl-copy briefly takes keyboard focus on GNOME; let it return before the paste key.
   # xclip doesn't, so no wait then.
-  [ "$CLIP_XCLIP_ONLY" -eq 0 ] && sleep 0.08
+  [ "$CLIP_XCLIP_ONLY" -eq 0 ] && sleep 0.04
   return 0
 }
 
@@ -286,7 +292,7 @@ clip_save() {
     types=$(timeout 0.25 wl-paste --list-types 2>/dev/null); rc=$?
     if [ "$rc" -eq 0 ] && [ -n "$types" ]; then
       CLIP_TYPE=$(clip_pick_type "$types")
-      CLIP_FILE=$(mktemp /tmp/xhisper-clip.XXXXXX)
+      CLIP_FILE=$(mktemp "$RUNTIME_DIR/xhisper-clip.XXXXXX")
       timeout 0.5 wl-paste --no-newline --type "$CLIP_TYPE" > "$CLIP_FILE" 2>/dev/null &&
         { CLIP_STATE=saved; return 0; }
     elif [ "$rc" -ne 124 ]; then
@@ -300,7 +306,7 @@ clip_save() {
     types=$(timeout 0.25 xclip -o -selection clipboard -t TARGETS 2>/dev/null); rc=$?
     if [ "$rc" -eq 0 ] && [ -n "$types" ]; then
       CLIP_TYPE=$(clip_pick_type "$types")
-      CLIP_FILE=${CLIP_FILE:-$(mktemp /tmp/xhisper-clip.XXXXXX)}
+      CLIP_FILE=${CLIP_FILE:-$(mktemp "$RUNTIME_DIR/xhisper-clip.XXXXXX")}
       timeout 0.5 xclip -o -selection clipboard -t "$CLIP_TYPE" > "$CLIP_FILE" 2>/dev/null &&
         { CLIP_STATE=saved; return 0; }
     elif [ "$rc" -eq 1 ]; then
@@ -433,11 +439,20 @@ transcribe() {
 # Never leave a saved clipboard copy behind, whatever path the script exits by.
 trap '[ -n "$CLIP_FILE" ] && rm -f "$CLIP_FILE"' EXIT
 
+# Wait until min-latency ms have passed since this run started (the stop key press),
+# so fast paths don't feel different from slow ones.
+pad_to_min_latency() {
+  local elapsed=$(( ($(date +%s%N) - T0) / 1000000 )) wait_ms
+  wait_ms=$(( ${min_latency:-0} - elapsed ))
+  [ "$wait_ms" -gt 0 ] && sleep "$(( wait_ms / 1000 )).$(printf '%03d' $(( wait_ms % 1000 )))"
+  mark pad
+}
+
 # ms since the previous mark; appends "name=Nms" to TIMING
 TIMING=""; T_LAST=$T0
 mark() { local now=$(date +%s%N); TIMING+="$1=$(( (now - T_LAST) / 1000000 ))ms "; T_LAST=$now; }
 
-REC_PID_FILE=/tmp/xhisper-rec.pid
+REC_PID_FILE="$RUNTIME_DIR/xhisper-rec.pid"
 
 # A recording is running: stop it and transcribe
 if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
@@ -450,7 +465,7 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
   mark stop
 
   # Upload right away; check for silence and save the clipboard while it runs.
-  TRANSCRIPT_FILE=$(mktemp /tmp/xhisper-transcript.XXXXXX)
+  TRANSCRIPT_FILE=$(mktemp "$RUNTIME_DIR/xhisper-transcript.XXXXXX")
   transcribe "$RECORDING" > "$TRANSCRIPT_FILE" &
   TRANSCRIBE_PID=$!
 
@@ -467,16 +482,18 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
   TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
   mark transcribe-wait
   if [ -z "$TRANSCRIPTION" ] || [ "$TRANSCRIPTION" = "null" ]; then
-    notify "Transcription failed (see /tmp/xhisper.log)" 4000
+    notify "Transcription failed (see xhisper --log)" 4000
     rm -f "$RECORDING"
     exit 1
   fi
 
   if [ "$insert_mode" = "paste" ] && clip_stage "$TRANSCRIPTION"; then
     mark clipboard
+    pad_to_min_latency
     paste_staged
     mark paste+restore
   else
+    pad_to_min_latency
     paste "$TRANSCRIPTION"
     mark type
   fi

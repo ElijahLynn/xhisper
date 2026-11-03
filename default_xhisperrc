@@ -9,6 +9,10 @@ insert-mode : paste
 # indicator extension to see the focused app), ctrl+v, or ctrl+shift+v.
 paste-key : auto
 
+# Text never appears sooner than this many ms after the stop key press, so every app
+# feels the same (the X11/xclip path is otherwise faster). 0 disables the floor.
+min-latency : 450
+
 # Recording indicator (GNOME Shell extension in extension/).
 indicator-color : red      # red, orange, yellow, green, blue, purple, pink, white
 indicator-style : meter    # meter (level bars) or orb (pulsing orb)
