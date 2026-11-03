@@ -1,32 +1,26 @@
-# xhisper configuration
-# Copy to ~/.config/xhisper/xhisperrc and customize
-# When in doubt, check by running 'xhisper --log'
+# xhisper configuration: copy to ~/.config/xhisper/xhisperrc and edit.
+# Every setting is optional; these are the defaults. See README.md for details.
 
-# Transcription Settings:
-long-recording-threshold : 1000
-transcription-prompt     : ""
+# How the transcription is inserted: paste (all at once via the clipboard, which
+# is restored afterwards) or type (one key per character).
+insert-mode : paste
 
-# Paste Timing (seconds):
-non-ascii-initial-delay : 0.15 # Increase this if first character comes out wrong.
-non-ascii-default-delay : 0.025
-
-# ASCII key gap (microseconds after each key). Default matches built-in speed.
-# Raise only if a target app drops keys (e.g. Warp pegs the GPU and drops spaces).
-type-key-gap : 2000
-
-# Silence Detection:
-silence-threshold  : -50
-silence-percentage : 95
-
-# How the transcription is inserted: "type" (key by key) or "paste" (all at once
-# via the clipboard; your previous clipboard text is restored afterwards).
-insert-mode : type
-# Paste shortcut for insert-mode paste: auto (ctrl+shift+v in terminals, ctrl+v
-# elsewhere; needs the xhisper-indicator extension to see the focused app), ctrl+v,
-# or ctrl+shift+v.
+# Paste shortcut: auto (Ctrl+Shift+V in terminals, Ctrl+V elsewhere; needs the
+# indicator extension to see the focused app), ctrl+v, or ctrl+shift+v.
 paste-key : auto
 
-# Recording indicator (needs the xhisper-indicator GNOME Shell extension in extension/;
-# without it there is no indicator).
-indicator-color : red
-indicator-style : meter
+# Recording indicator (GNOME Shell extension in extension/).
+indicator-color : red      # red, orange, yellow, green, blue, purple, pink, white
+indicator-style : meter    # meter (level bars) or orb (pulsing orb)
+
+# Transcription
+transcription-prompt     : ""     # optional context words; keep it short
+long-recording-threshold : 1000   # seconds; longer recordings use whisper-large-v3
+
+# Peak volume (dB) below which a recording counts as silent and is ignored.
+silence-threshold : -50
+
+# type mode only
+type-key-gap            : 2000    # microseconds between keys; raise if an app drops keys
+non-ascii-initial-delay : 0.15    # seconds after the first pasted non-ASCII character
+non-ascii-default-delay : 0.025   # seconds after each following one

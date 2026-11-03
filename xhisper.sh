@@ -1,26 +1,16 @@
 #!/bin/bash
 
-# xhisper v1.0
-# Dictate anywhere in Linux. Transcription at your cursor.
-# - Transcription via Groq Whisper
-
-# Configuration (see default_xhisperrc or ~/.config/xhisper/xhisperrc):
-# - long-recording-threshold : threshold for using large vs turbo model (seconds)
-# - transcription-prompt : context words for better Whisper accuracy
-# - silence-threshold : max volume in dB to consider silent (e.g., -50)
-# - silence-percentage : percentage of recording that must be silent (e.g., 95)
-# - non-ascii-initial-delay : sleep after first non-ASCII paste (seconds)
-# - non-ascii-default-delay : sleep after subsequent non-ASCII pastes (seconds)
-# - insert-mode : "type" (key by key, default) or "paste" (whole text via clipboard, instant)
-# - paste-key : "auto" (default: ctrl+shift+v in terminals, ctrl+v elsewhere), "ctrl+v" or "ctrl+shift+v"
-# - indicator-color : recording indicator color (red, orange, yellow, green, blue, purple, pink, white)
-# - indicator-style : recording indicator style, "meter" (level bars) or "orb"
-
-# Requirements:
-# - pipewire, pipewire-utils (audio)
-# - wl-clipboard (Wayland) or xclip (X11) for clipboard
-# - jq, curl, ffmpeg (processing)
-# - make to build, sudo make install to install
+# xhisper: push-to-dictate for Linux. Run once to start recording, again to stop,
+# transcribe with Groq Whisper and paste the text at the cursor.
+#
+# Settings: ~/.config/xhisper/xhisperrc (see default_xhisperrc and README.md):
+#   insert-mode, paste-key, indicator-color, indicator-style, transcription-prompt,
+#   long-recording-threshold, silence-threshold, type-key-gap,
+#   non-ascii-initial-delay, non-ascii-default-delay
+#
+# Requires: pipewire (pw-record), curl, jq, ffmpeg, wl-clipboard, xclip, gdbus,
+# notify-send; xhispertool/xhispertoold (make && sudo make install); optionally the
+# xhisper-indicator GNOME Shell extension in extension/.
 
 T0=$(date +%s%N)  # per-step timing, logged after each dictation
 [ -f "$HOME/.env" ] && source "$HOME/.env"
@@ -74,15 +64,14 @@ PROCESS_PATTERN="pw-record.*$RECORDING"
 long_recording_threshold=1000
 transcription_prompt=""
 silence_threshold=-50
-silence_percentage=95
 non_ascii_initial_delay=0.1
 non_ascii_default_delay=0.025
 # Microseconds to pause after each ASCII key. Default matches built-in speed;
 # raise it only if a target app drops keys (e.g. Warp under GPU load).
 type_key_gap=2000
-# "type" sends one key per character (slow for long dictations: one process per key);
-# "paste" puts the whole transcription on the clipboard, pastes once, then restores it.
-insert_mode=type
+# "paste" (default) puts the whole transcription on the clipboard, pastes once, then
+# restores it; "type" sends one key per character (slow: one process per key).
+insert_mode=paste
 paste_key=auto  # auto: ctrl+shift+v in terminals (needs the indicator extension), else ctrl+v
 indicator_color=red
 indicator_style=meter
@@ -103,7 +92,6 @@ if [ -f "$CONFIG_FILE" ]; then
       long-recording-threshold) long_recording_threshold="$value" ;;
       transcription-prompt) transcription_prompt="$value" ;;
       silence-threshold) silence_threshold="$value" ;;
-      silence-percentage) silence_percentage="$value" ;;
       non-ascii-initial-delay) non_ascii_initial_delay="$value" ;;
       non-ascii-default-delay) non_ascii_default_delay="$value" ;;
       type-key-gap) type_key_gap="$value" ;;
