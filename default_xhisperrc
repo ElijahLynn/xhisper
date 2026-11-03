@@ -18,3 +18,15 @@ type-key-gap : 2000
 silence-threshold  : -50
 silence-percentage : 95
 
+# How the transcription is inserted: "type" (key by key) or "paste" (all at once
+# via the clipboard; your previous clipboard text is restored afterwards).
+insert-mode : type
+# Paste shortcut for insert-mode paste: auto (ctrl+shift+v in terminals, ctrl+v
+# elsewhere; needs the xhisper-indicator extension to see the focused app), ctrl+v,
+# or ctrl+shift+v.
+paste-key : auto
+
+# Recording indicator (needs the xhisper-indicator GNOME Shell extension in extension/;
+# without it there is no indicator).
+indicator-color : red
+indicator-style : meter

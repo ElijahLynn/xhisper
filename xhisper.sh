@@ -11,6 +11,10 @@
 # - silence-percentage : percentage of recording that must be silent (e.g., 95)
 # - non-ascii-initial-delay : sleep after first non-ASCII paste (seconds)
 # - non-ascii-default-delay : sleep after subsequent non-ASCII pastes (seconds)
+# - insert-mode : "type" (key by key, default) or "paste" (whole text via clipboard, instant)
+# - paste-key : "auto" (default: ctrl+shift+v in terminals, ctrl+v elsewhere), "ctrl+v" or "ctrl+shift+v"
+# - indicator-color : recording indicator color (red, orange, yellow, green, blue, purple, pink, white)
+# - indicator-style : recording indicator style, "meter" (level bars) or "orb"
 
 # Requirements:
 # - pipewire, pipewire-utils (audio)
@@ -18,6 +22,7 @@
 # - jq, curl, ffmpeg (processing)
 # - make to build, sudo make install to install
 
+T0=$(date +%s%N)  # per-step timing, logged after each dictation
 [ -f "$HOME/.env" ] && source "$HOME/.env"
 
 # Parse command-line arguments
@@ -75,6 +80,12 @@ non_ascii_default_delay=0.025
 # Microseconds to pause after each ASCII key. Default matches built-in speed;
 # raise it only if a target app drops keys (e.g. Warp under GPU load).
 type_key_gap=2000
+# "type" sends one key per character (slow for long dictations: one process per key);
+# "paste" puts the whole transcription on the clipboard, pastes once, then restores it.
+insert_mode=type
+paste_key=auto  # auto: ctrl+shift+v in terminals (needs the indicator extension), else ctrl+v
+indicator_color=red
+indicator_style=meter
 
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/xhisper/xhisperrc"
 
@@ -96,6 +107,10 @@ if [ -f "$CONFIG_FILE" ]; then
       non-ascii-initial-delay) non_ascii_initial_delay="$value" ;;
       non-ascii-default-delay) non_ascii_default_delay="$value" ;;
       type-key-gap) type_key_gap="$value" ;;
+      insert-mode) insert_mode="$value" ;;
+      paste-key) paste_key="$value" ;;
+      indicator-color) indicator_color="$value" ;;
+      indicator-style) indicator_style="$value" ;;
     esac
   done < "$CONFIG_FILE"
 fi
@@ -168,6 +183,156 @@ paste() {
   press_wrap_key
 }
 
+# insert-mode paste, in two steps so no keystrokes are in flight while the clipboard
+# is touched: on GNOME, wl-copy/wl-paste briefly take keyboard focus, and keys sent
+# meanwhile (e.g. the backspaces erasing "(transcribing...)") go to them and are lost.
+#   clip_save        - save the user's clipboard (runs during the upload)
+#   clip_stage TEXT  - put TEXT on the clipboard (before any keys)
+#   paste_staged     - send the paste key, then restore the user's clipboard
+CLIP_STATE=unknown  # after clip_save: saved | empty | unknown (couldn't read)
+CLIP_TYPE=""        # MIME type / X11 target of the saved content
+CLIP_FILE=""        # saved bytes (a file, so images and other binary data survive)
+# Put text on the clipboard. wl-copy first; xclip as the fallback, because wl-copy
+# fails or times out while an X11 (XWayland) window such as Warp has focus, and
+# Mutter bridges the X11 clipboard to Wayland apps anyway.
+CLIP_XCLIP_ONLY=0  # set once wl-copy fails, so later calls skip straight to xclip
+# The transcription is marked sensitive (KDE password-manager hint, which clipboard
+# history tools honour) so dictations don't pile up in clipboard history.
+clip_set() {
+  local text="$1"
+  if [ "$CLIP_XCLIP_ONLY" -eq 0 ] && command -v wl-copy >/dev/null 2>&1 &&
+     printf '%s' "$text" | timeout 0.3 wl-copy --sensitive 2>/dev/null; then
+    return 0
+  fi
+  CLIP_XCLIP_ONLY=1
+  command -v xclip >/dev/null 2>&1 &&
+    printf '%s' "$text" | timeout 0.5 xclip -selection clipboard -i 2>/dev/null
+}
+
+# Best type to save from a list of offered types (one per line): text, then image,
+# then whatever comes first.
+clip_pick_type() {
+  local types="$1" t
+  for t in 'text/plain;charset=utf-8' 'UTF8_STRING' 'text/plain'; do
+    printf '%s\n' "$types" | grep -qxF "$t" && { echo "$t"; return; }
+  done
+  t=$(printf '%s\n' "$types" | grep -m1 '^image/') && { echo "$t"; return; }
+  printf '%s\n' "$types" | grep -v -m1 -E '^(TARGETS|TIMESTAMP|MULTIPLE|SAVE_TARGETS)$'
+}
+
+# Put the saved clipboard back, or clear it if it was empty, so dictations never
+# stay on the clipboard.
+clip_restore() {
+  local wtype="$CLIP_TYPE" xtype="$CLIP_TYPE"
+  case "$wtype" in UTF8_STRING|STRING|TEXT) wtype='text/plain;charset=utf-8' ;; esac
+  case "$xtype" in text/plain*) xtype=UTF8_STRING ;; esac
+  case "$CLIP_STATE" in
+    saved)
+      { [ "$CLIP_XCLIP_ONLY" -eq 0 ] && timeout 0.3 wl-copy --type "$wtype" < "$CLIP_FILE" 2>/dev/null; } ||
+        timeout 0.5 xclip -selection clipboard -t "$xtype" -i "$CLIP_FILE" 2>/dev/null ||
+        echo "=== paste mode: could not restore the old clipboard ===" >> "$LOGFILE"
+      ;;
+    empty)
+      { [ "$CLIP_XCLIP_ONLY" -eq 0 ] && timeout 0.3 wl-copy --clear 2>/dev/null; } ||
+        printf '' | timeout 0.5 xclip -selection clipboard -i 2>/dev/null
+      ;;
+  esac
+  [ -n "$CLIP_FILE" ] && rm -f "$CLIP_FILE"
+}
+
+clip_stage() {
+  if ! clip_set "$1"; then
+    echo "=== paste mode: could not set the clipboard (install wl-clipboard or xclip); typing instead ===" >> "$LOGFILE"
+    return 1
+  fi
+  sleep 0.08  # let keyboard focus return to the target window before sending keys
+}
+
+# Save the user's clipboard (text only) so paste_staged can restore it. Run while the
+# transcription uploads, so it costs nothing. Binary content like images can't
+# round-trip through a shell variable and is left replaced. Every clipboard call is
+# time-limited: some clipboard owners never answer a read, and wl-paste then blocks.
+clip_save() {
+  local types rc
+  if command -v wl-paste >/dev/null 2>&1; then
+    types=$(timeout 0.25 wl-paste --list-types 2>/dev/null); rc=$?
+    if [ "$rc" -eq 0 ] && [ -n "$types" ]; then
+      CLIP_TYPE=$(clip_pick_type "$types")
+      CLIP_FILE=$(mktemp /tmp/xhisper-clip.XXXXXX)
+      timeout 0.5 wl-paste --no-newline --type "$CLIP_TYPE" > "$CLIP_FILE" 2>/dev/null &&
+        { CLIP_STATE=saved; return 0; }
+    elif [ "$rc" -ne 124 ]; then
+      CLIP_STATE=empty; return 0  # answered quickly with nothing: "Nothing is copied"
+    fi
+  fi
+  # wl-paste fails while an X11 window has focus; ask the X11 clipboard instead.
+  if command -v xclip >/dev/null 2>&1; then
+    types=$(timeout 0.25 xclip -o -selection clipboard -t TARGETS 2>/dev/null); rc=$?
+    if [ "$rc" -eq 0 ] && [ -n "$types" ]; then
+      CLIP_TYPE=$(clip_pick_type "$types")
+      CLIP_FILE=${CLIP_FILE:-$(mktemp /tmp/xhisper-clip.XXXXXX)}
+      timeout 0.5 xclip -o -selection clipboard -t "$CLIP_TYPE" > "$CLIP_FILE" 2>/dev/null &&
+        { CLIP_STATE=saved; return 0; }
+    elif [ "$rc" -eq 1 ]; then
+      CLIP_STATE=empty; return 0  # no clipboard owner
+    fi
+  fi
+  echo "=== paste mode: could not read the old clipboard; it will not be restored ===" >> "$LOGFILE"
+}
+
+# Terminals paste with Ctrl+Shift+V. paste-key "auto" asks the xhisper-indicator
+# extension which window has focus (only a Shell extension can see that on Wayland).
+TERMINAL_CLASSES='warp|kitty|alacritty|foot|wezterm|ghostty|terminal|ptyxis|konsole|xterm|tilix|terminator|kgx|console|blackbox|rio'
+resolve_paste_key() {
+  [ "$paste_key" = "auto" ] || { echo "$paste_key"; return; }
+  local win
+  if win=$(timeout 0.2 gdbus call "${INDICATOR_DBUS[@]}" \
+           --method io.github.elijahlynn.XhisperIndicator.FocusedWindow 2>/dev/null); then
+    if printf '%s' "$win" | grep -qiE "$TERMINAL_CLASSES"; then echo ctrl+shift+v; else echo ctrl+v; fi
+  elif [ "$CLIP_XCLIP_ONLY" -eq 1 ]; then
+    # No extension to ask. wl-copy only fails while an X11 window (e.g. Warp) has
+    # focus, which on this setup is most likely a terminal.
+    echo ctrl+shift+v
+  else
+    echo ctrl+v
+  fi
+}
+
+paste_staged() {
+  local key; key=$(resolve_paste_key)
+  press_wrap_key
+  if [ "$key" = "ctrl+shift+v" ]; then
+    "$XHISPERTOOL" pasteshift
+  else
+    "$XHISPERTOOL" paste
+  fi
+  press_wrap_key
+  sleep 0.3  # let the target app read the clipboard before it changes again
+  clip_restore
+}
+
+# Status is shown on screen, never typed into the focused app (typing and then
+# erasing placeholder text raced with other input and left fragments behind).
+notify() {
+  command -v notify-send >/dev/null 2>&1 &&
+    notify-send -a xhisper -h int:transient:1 -t "${2:-2000}" "$1" 2>/dev/null || true
+}
+
+# Recording indicator: an on-screen overlay drawn by the xhisper-indicator GNOME Shell
+# extension (bottom-center level meter, like groq-flow on macOS), reached over D-Bus.
+# Without the extension there is no indicator (no notification either: they pile up).
+INDICATOR_DBUS=(--session --dest org.gnome.Shell --object-path /io/github/elijahlynn/XhisperIndicator)
+indicator_show() {
+  local color="${indicator_color//[^a-zA-Z]/}" style="${indicator_style//[^a-zA-Z]/}"
+  gdbus call "${INDICATOR_DBUS[@]}" --method io.github.elijahlynn.XhisperIndicator.Show \
+    "${color:-red}" "${style:-meter}" >/dev/null 2>&1 ||
+    echo "=== indicator unavailable: is the xhisper-indicator extension enabled? ===" >> "$LOGFILE"
+}
+indicator_hide() {
+  gdbus call "${INDICATOR_DBUS[@]}" --method io.github.elijahlynn.XhisperIndicator.Hide \
+    >/dev/null 2>&1 || true
+}
+
 delete_n_chars() {
   local n="$1"
   for ((i=0; i<n; i++)); do
@@ -176,8 +341,10 @@ delete_n_chars() {
 }
 
 get_duration() {
-  local recording="$1"
-  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$recording" 2>/dev/null || echo "0"
+  # From the file size: pw-record writes 16 kHz mono 16-bit WAV (32000 bytes/s, 44-byte
+  # header). Much faster than spawning ffprobe on every dictation.
+  local bytes=$(stat -c %s "$1" 2>/dev/null || echo 44)
+  echo $(( (bytes - 44) / 32000 ))
 }
 
 is_silent() {
@@ -233,30 +400,59 @@ transcribe() {
 
 # Main
 
+# Never leave a saved clipboard copy behind, whatever path the script exits by.
+trap '[ -n "$CLIP_FILE" ] && rm -f "$CLIP_FILE"' EXIT
+
+# ms since the previous mark; appends "name=Nms" to TIMING
+TIMING=""; T_LAST=$T0
+mark() { local now=$(date +%s%N); TIMING+="$1=$(( (now - T_LAST) / 1000000 ))ms "; T_LAST=$now; }
+
 # Find recording process, if so then kill
 if pgrep -f "$PROCESS_PATTERN" > /dev/null; then
-  pkill -f "$PROCESS_PATTERN"; sleep 0.2 # Buffer for flush
-  delete_n_chars 14 # "(recording...)"
+  mark startup
+  pkill -f "$PROCESS_PATTERN"
+  # Wait for pw-record to exit (it finalizes the WAV header on exit) instead of a
+  # fixed sleep; give up after 0.5 s.
+  for _ in $(seq 50); do pgrep -f "$PROCESS_PATTERN" > /dev/null || break; sleep 0.01; done
+  indicator_hide
+  mark stop
 
-  # Check if recording is silent
+  # Upload right away; check for silence and save the clipboard while it runs.
+  TRANSCRIPT_FILE=$(mktemp /tmp/xhisper-transcript.XXXXXX)
+  transcribe "$RECORDING" > "$TRANSCRIPT_FILE" &
+  TRANSCRIBE_PID=$!
+
   if is_silent "$RECORDING"; then
-    paste "(no sound detected)"
-    sleep 0.6
-    delete_n_chars 19 # "(no sound detected)"
-    rm -f "$RECORDING"
+    kill "$TRANSCRIBE_PID" 2>/dev/null
+    notify "No sound detected"
+    rm -f "$RECORDING" "$TRANSCRIPT_FILE"
     exit 0
   fi
+  [ "$insert_mode" = "paste" ] && clip_save
+  mark silence+clipboard-save
 
-  paste "(transcribing...)"
-  TRANSCRIPTION=$(transcribe "$RECORDING")
-  delete_n_chars 17 # "(transcribing...)"
+  wait "$TRANSCRIBE_PID"
+  TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
+  mark transcribe-wait
+  if [ -z "$TRANSCRIPTION" ] || [ "$TRANSCRIPTION" = "null" ]; then
+    notify "Transcription failed (see /tmp/xhisper.log)" 4000
+    rm -f "$RECORDING"
+    exit 1
+  fi
 
-  paste "$TRANSCRIPTION"
+  if [ "$insert_mode" = "paste" ] && clip_stage "$TRANSCRIPTION"; then
+    mark clipboard
+    paste_staged
+    mark paste+restore
+  else
+    paste "$TRANSCRIPTION"
+    mark type
+  fi
+  echo "Timing: ${TIMING}total=$(( ($(date +%s%N) - T0) / 1000000 ))ms (${#TRANSCRIPTION} chars)" >> "$LOGFILE"
 
   rm -f "$RECORDING"
 else
   # No recording running, so start
-  sleep 0.2
-  paste "(recording...)"
+  indicator_show
   pw-record --channels=1 --rate=16000 "$RECORDING"
 fi

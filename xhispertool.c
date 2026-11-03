@@ -27,7 +27,7 @@
 // Function prototypes
 void cleanup(void);
 void emit(int type, int code, int val);
-void do_paste(void);
+void do_paste(int shift);
 void type_char(unsigned char c, int gap);
 void do_backspace(void);
 void do_key(int keycode);
@@ -138,9 +138,14 @@ void emit(int type, int code, int val) {
     write(fd_uinput, &ie, sizeof(ie));
 }
 
-void do_paste() {
+// shift=1 sends Ctrl+Shift+V, which terminals use for paste.
+void do_paste(int shift) {
     emit(EV_KEY, KEY_LEFTCTRL, 1);
     emit(EV_SYN, SYN_REPORT, 0);
+    if (shift) {
+        emit(EV_KEY, KEY_LEFTSHIFT, 1);
+        emit(EV_SYN, SYN_REPORT, 0);
+    }
     usleep(8000);
     emit(EV_KEY, KEY_V, 1);
     emit(EV_SYN, SYN_REPORT, 0);
@@ -148,6 +153,10 @@ void do_paste() {
     emit(EV_KEY, KEY_V, 0);
     emit(EV_SYN, SYN_REPORT, 0);
     usleep(2000);
+    if (shift) {
+        emit(EV_KEY, KEY_LEFTSHIFT, 0);
+        emit(EV_SYN, SYN_REPORT, 0);
+    }
     emit(EV_KEY, KEY_LEFTCTRL, 0);
     emit(EV_SYN, SYN_REPORT, 0);
 }
@@ -305,7 +314,9 @@ int run_daemon() {
         if (n >= 1) {
             char cmd = buf[0];
             if (cmd == 'p') {
-                do_paste();
+                do_paste(0);
+            } else if (cmd == 'P') {
+                do_paste(1);
             } else if (cmd == 't' && n >= 2) {
                 // Optional trailing 2 bytes = inter-key gap (us, LE); else default.
                 int gap = (n >= 4)
@@ -340,6 +351,7 @@ void show_usage() {
     fprintf(stderr,
         "Usage:\n"
         "  xhispertool paste            - Paste from clipboard (Ctrl+V)\n"
+        "  xhispertool pasteshift       - Paste from clipboard (Ctrl+Shift+V, terminals)\n"
         "  xhispertool type <char> [gap_us] - Type one ASCII char (optional gap)\n"
         "  xhispertool backspace        - Press backspace\n"
         "\n"
@@ -398,6 +410,9 @@ int run_client(int argc, char *argv[]) {
 
     if (strcmp(argv[1], "paste") == 0) {
         buf[0] = 'p';
+        len = 1;
+    } else if (strcmp(argv[1], "pasteshift") == 0) {
+        buf[0] = 'P';
         len = 1;
     } else if (strcmp(argv[1], "backspace") == 0) {
         buf[0] = 'b';
