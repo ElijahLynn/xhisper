@@ -58,7 +58,6 @@ fi
 
 RECORDING="/tmp/xhisper.wav"
 LOGFILE="/tmp/xhisper.log"
-PROCESS_PATTERN="pw-record.*$RECORDING"
 
 # Default configuration
 long_recording_threshold=1000
@@ -84,9 +83,11 @@ if [ -f "$CONFIG_FILE" ]; then
     [[ "$key" =~ ^[[:space:]]*# ]] && continue
     [[ -z "$key" ]] && continue
 
-    # Trim whitespace and quotes
-    key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//')
+    # Strip inline "# comments", whitespace and quotes (pure bash: no process per line)
+    value="${value%%#*}"
+    key="${key#"${key%%[![:space:]]*}"}"; key="${key%"${key##*[![:space:]]}"}"
+    value="${value#"${value%%[![:space:]]*}"}"; value="${value%"${value##*[![:space:]]}"}"
+    value="${value#\"}"; value="${value%\"}"
 
     case "$key" in
       long-recording-threshold) long_recording_threshold="$value" ;;
@@ -103,17 +104,31 @@ if [ -f "$CONFIG_FILE" ]; then
   done < "$CONFIG_FILE"
 fi
 
-# Auto-start daemon if not running
-if ! pgrep -x xhispertoold > /dev/null; then
-    "$XHISPERTOOLD" 2>> /tmp/xhispertoold.log &
-    sleep 1  # Give daemon time to start
+# Is a process with this PID running and named NAME? Reads /proc directly: pgrep scans
+# every process and costs ~50 ms on a busy desktop, several times per dictation.
+pid_is() {  # pid name
+  local comm state
+  [ -n "$1" ] && read -r comm 2>/dev/null < "/proc/$1/comm" && [ "$comm" = "$2" ] || return 1
+  read -r state 2>/dev/null < "/proc/$1/stat"; state="${state##*) }"
+  [ "${state%% *}" != Z ]  # an exited process waiting to be reaped doesn't count
+}
+read_pid() { local pid; read -r pid < "$1" 2>/dev/null && echo "$pid"; }
 
-    # Verify daemon started successfully
-    if ! pgrep -x xhispertoold > /dev/null; then
-        echo "Error: Failed to start xhispertoold daemon" >&2
-        echo "Check /tmp/xhispertoold.log for details" >&2
-        exit 1
+# Auto-start the key-sending daemon if it isn't running
+DAEMON_PID_FILE=/tmp/xhispertoold.pid
+if ! pid_is "$(read_pid "$DAEMON_PID_FILE")" xhispertoold; then
+  if pid=$(pgrep -x -n xhispertoold); then
+    echo "$pid" > "$DAEMON_PID_FILE"  # started some other way; remember it
+  else
+    "$XHISPERTOOLD" 2>> /tmp/xhispertoold.log &
+    echo $! > "$DAEMON_PID_FILE"
+    sleep 1  # Give daemon time to start
+    if ! pid_is "$(read_pid "$DAEMON_PID_FILE")" xhispertoold; then
+      echo "Error: Failed to start xhispertoold daemon" >&2
+      echo "Check /tmp/xhispertoold.log for details" >&2
+      exit 1
     fi
+  fi
 fi
 
 # Check if xhispertool is available
@@ -184,6 +199,28 @@ CLIP_FILE=""        # saved bytes (a file, so images and other binary data survi
 # fails or times out while an X11 (XWayland) window such as Warp has focus, and
 # Mutter bridges the X11 clipboard to Wayland apps anyway.
 CLIP_XCLIP_ONLY=0  # set once wl-copy fails, so later calls skip straight to xclip
+
+# The focused window, asked once per dictation from the indicator extension:
+# FOCUS is "('wm_class', 'app_id')", FOCUS_CLASS the wm_class. Apps where the Wayland
+# clipboard failed before (X11/XWayland apps such as Warp) are remembered in
+# X11_APPS_FILE and go straight to xclip, skipping two timeouts (~400 ms).
+FOCUS=""; FOCUS_CLASS=""
+X11_APPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/xhisper/x11-apps"
+focus_query() {
+  FOCUS=$(timeout 0.2 gdbus call "${INDICATOR_DBUS[@]}" \
+          --method io.github.elijahlynn.XhisperIndicator.FocusedWindow 2>/dev/null) || FOCUS=""
+  [[ "$FOCUS" =~ ^\(\'([^\']*)\' ]] && FOCUS_CLASS="${BASH_REMATCH[1]}"
+  local app
+  if [ -n "$FOCUS_CLASS" ] && [ -f "$X11_APPS_FILE" ]; then
+    while IFS= read -r app; do [ "$app" = "$FOCUS_CLASS" ] && CLIP_XCLIP_ONLY=1 && break; done < "$X11_APPS_FILE"
+  fi
+}
+remember_x11_app() {
+  CLIP_XCLIP_ONLY=1
+  [ -n "$FOCUS_CLASS" ] || return 0
+  grep -qxF "$FOCUS_CLASS" "$X11_APPS_FILE" 2>/dev/null && return 0
+  mkdir -p "${X11_APPS_FILE%/*}" && echo "$FOCUS_CLASS" >> "$X11_APPS_FILE"
+}
 # The transcription is marked sensitive (KDE password-manager hint, which clipboard
 # history tools honour) so dictations don't pile up in clipboard history.
 clip_set() {
@@ -192,7 +229,7 @@ clip_set() {
      printf '%s' "$text" | timeout 0.3 wl-copy --sensitive 2>/dev/null; then
     return 0
   fi
-  CLIP_XCLIP_ONLY=1
+  [ "$CLIP_XCLIP_ONLY" -eq 0 ] && remember_x11_app
   command -v xclip >/dev/null 2>&1 &&
     printf '%s' "$text" | timeout 0.5 xclip -selection clipboard -i 2>/dev/null
 }
@@ -233,7 +270,10 @@ clip_stage() {
     echo "=== paste mode: could not set the clipboard (install wl-clipboard or xclip); typing instead ===" >> "$LOGFILE"
     return 1
   fi
-  sleep 0.08  # let keyboard focus return to the target window before sending keys
+  # wl-copy briefly takes keyboard focus on GNOME; let it return before the paste key.
+  # xclip doesn't, so no wait then.
+  [ "$CLIP_XCLIP_ONLY" -eq 0 ] && sleep 0.08
+  return 0
 }
 
 # Save the user's clipboard (text only) so paste_staged can restore it. Run while the
@@ -242,7 +282,7 @@ clip_stage() {
 # time-limited: some clipboard owners never answer a read, and wl-paste then blocks.
 clip_save() {
   local types rc
-  if command -v wl-paste >/dev/null 2>&1; then
+  if [ "$CLIP_XCLIP_ONLY" -eq 0 ] && command -v wl-paste >/dev/null 2>&1; then
     types=$(timeout 0.25 wl-paste --list-types 2>/dev/null); rc=$?
     if [ "$rc" -eq 0 ] && [ -n "$types" ]; then
       CLIP_TYPE=$(clip_pick_type "$types")
@@ -251,6 +291,8 @@ clip_save() {
         { CLIP_STATE=saved; return 0; }
     elif [ "$rc" -ne 124 ]; then
       CLIP_STATE=empty; return 0  # answered quickly with nothing: "Nothing is copied"
+    else
+      remember_x11_app  # timed out: an X11 window has focus
     fi
   fi
   # wl-paste fails while an X11 window has focus; ask the X11 clipboard instead.
@@ -273,10 +315,10 @@ clip_save() {
 TERMINAL_CLASSES='warp|kitty|alacritty|foot|wezterm|ghostty|terminal|ptyxis|konsole|xterm|tilix|terminator|kgx|console|blackbox|rio'
 resolve_paste_key() {
   [ "$paste_key" = "auto" ] || { echo "$paste_key"; return; }
-  local win
-  if win=$(timeout 0.2 gdbus call "${INDICATOR_DBUS[@]}" \
-           --method io.github.elijahlynn.XhisperIndicator.FocusedWindow 2>/dev/null); then
-    if printf '%s' "$win" | grep -qiE "$TERMINAL_CLASSES"; then echo ctrl+shift+v; else echo ctrl+v; fi
+  if [ -n "$FOCUS" ]; then
+    shopt -s nocasematch
+    if [[ "$FOCUS" =~ $TERMINAL_CLASSES ]]; then echo ctrl+shift+v; else echo ctrl+v; fi
+    shopt -u nocasematch
   elif [ "$CLIP_XCLIP_ONLY" -eq 1 ]; then
     # No extension to ask. wl-copy only fails while an X11 window (e.g. Warp) has
     # focus, which on this setup is most likely a terminal.
@@ -395,13 +437,15 @@ trap '[ -n "$CLIP_FILE" ] && rm -f "$CLIP_FILE"' EXIT
 TIMING=""; T_LAST=$T0
 mark() { local now=$(date +%s%N); TIMING+="$1=$(( (now - T_LAST) / 1000000 ))ms "; T_LAST=$now; }
 
-# Find recording process, if so then kill
-if pgrep -f "$PROCESS_PATTERN" > /dev/null; then
+REC_PID_FILE=/tmp/xhisper-rec.pid
+
+# A recording is running: stop it and transcribe
+if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
   mark startup
-  pkill -f "$PROCESS_PATTERN"
-  # Wait for pw-record to exit (it finalizes the WAV header on exit) instead of a
-  # fixed sleep; give up after 0.5 s.
-  for _ in $(seq 50); do pgrep -f "$PROCESS_PATTERN" > /dev/null || break; sleep 0.01; done
+  kill "$REC_PID"
+  # pw-record finalizes the WAV header on exit; wait for that (up to 0.5 s).
+  for _ in {1..100}; do pid_is "$REC_PID" pw-record || break; sleep 0.005; done
+  rm -f "$REC_PID_FILE"
   indicator_hide
   mark stop
 
@@ -416,8 +460,8 @@ if pgrep -f "$PROCESS_PATTERN" > /dev/null; then
     rm -f "$RECORDING" "$TRANSCRIPT_FILE"
     exit 0
   fi
-  [ "$insert_mode" = "paste" ] && clip_save
-  mark silence+clipboard-save
+  if [ "$insert_mode" = "paste" ]; then focus_query; clip_save; fi
+  mark silence+focus+clipboard-save
 
   wait "$TRANSCRIBE_PID"
   TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
@@ -442,5 +486,7 @@ if pgrep -f "$PROCESS_PATTERN" > /dev/null; then
 else
   # No recording running, so start
   indicator_show
-  pw-record --channels=1 --rate=16000 "$RECORDING"
+  pw-record --channels=1 --rate=16000 "$RECORDING" &
+  echo $! > "$REC_PID_FILE"
+  wait $!
 fi

@@ -143,6 +143,9 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
   into X11 apps can't carry the hint.)
 - Every clipboard call is time-limited, so a clipboard owner that never answers
   can't hang xhisper.
+- X11 (XWayland) apps such as Warp make the Wayland clipboard tools time out. The
+  first time that happens in an app, xhisper remembers it in
+  `~/.cache/xhisper/x11-apps` and uses `xclip` straight away from then on.
 
 ## Troubleshooting
 
@@ -158,7 +161,9 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
 
 ## How it works
 
-`xhisper` is a bash script: the first run starts `pw-record`, the second stops it,
+`xhisper` is a bash script: the first run starts `pw-record` (its PID goes in
+`/tmp/xhisper-rec.pid`; processes are checked through `/proc`, not `pgrep`, which
+costs ~50 ms per call on a busy desktop), the second stops it,
 uploads the WAV to Groq (while the silence check and clipboard save run in
 parallel), and pastes the result. `xhispertoold` is a small daemon that owns a
 uinput virtual keyboard; `xhispertool` sends it commands (`paste`, `pasteshift`,
