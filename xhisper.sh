@@ -203,29 +203,39 @@ paste() {
 CLIP_STATE=unknown  # after clip_save: saved | empty | unknown (couldn't read)
 CLIP_TYPE=""        # MIME type / X11 target of the saved content
 CLIP_FILE=""        # saved bytes (a file, so images and other binary data survive)
-# Put text on the clipboard. wl-copy first; xclip as the fallback, because wl-copy
+# Put text on the clipboard. wl-copy first; X11 as the fallback, because wl-copy
 # fails or times out while an X11 (XWayland) window such as Warp has focus, and
 # Mutter bridges the X11 clipboard to Wayland apps anyway.
-CLIP_XCLIP_ONLY=0  # set once wl-copy fails, so later calls skip straight to xclip
+CLIP_XCLIP_ONLY=0  # 1: skip the Wayland tools and use X11 straight away
 
 # The focused window, asked once per dictation from the indicator extension:
-# FOCUS is "('wm_class', 'app_id')", FOCUS_CLASS the wm_class. Apps where the Wayland
-# clipboard failed before (X11/XWayland apps such as Warp) are remembered in
-# X11_APPS_FILE and go straight to xclip, skipping two timeouts (~400 ms).
-FOCUS=""; FOCUS_CLASS=""
+# FOCUS is "('wm_class', 'app_id', 'client')", FOCUS_CLASS the wm_class and
+# FOCUS_CLIENT "x11" (XWayland window) or "wayland". Knowing the client up front
+# skips the Wayland tools' timeouts (~400 ms) in X11 apps. An older extension that
+# doesn't report the client: apps where the Wayland clipboard timed out before are
+# remembered in X11_APPS_FILE instead.
+FOCUS=""; FOCUS_CLASS=""; FOCUS_CLIENT=""
 X11_APPS_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/xhisper/x11-apps"
 focus_query() {
   FOCUS=$(timeout 0.2 gdbus call "${INDICATOR_DBUS[@]}" \
           --method io.github.elijahlynn.XhisperIndicator.FocusedWindow 2>/dev/null) || FOCUS=""
   [[ "$FOCUS" =~ ^\(\'([^\']*)\' ]] && FOCUS_CLASS="${BASH_REMATCH[1]}"
+  [[ "$FOCUS" =~ \'(x11|wayland)\'\)$ ]] && FOCUS_CLIENT="${BASH_REMATCH[1]}"
+  case "$FOCUS_CLIENT" in
+    x11) CLIP_XCLIP_ONLY=1; return ;;
+    wayland) return ;;
+  esac
   local app
   if [ -n "$FOCUS_CLASS" ] && [ -f "$X11_APPS_FILE" ]; then
     while IFS= read -r app; do [ "$app" = "$FOCUS_CLASS" ] && CLIP_XCLIP_ONLY=1 && break; done < "$X11_APPS_FILE"
   fi
 }
+# A Wayland clipboard tool failed: use X11 for the rest of this dictation, and
+# remember the app only when the extension couldn't say what kind of window it is
+# (a known Wayland window just had a one-off hiccup).
 remember_x11_app() {
   CLIP_XCLIP_ONLY=1
-  [ -n "$FOCUS_CLASS" ] || return 0
+  [ -z "$FOCUS_CLIENT" ] && [ -n "$FOCUS_CLASS" ] || return 0
   grep -qxF "$FOCUS_CLASS" "$X11_APPS_FILE" 2>/dev/null && return 0
   mkdir -p "${X11_APPS_FILE%/*}" && echo "$FOCUS_CLASS" >> "$X11_APPS_FILE"
 }

@@ -14,6 +14,7 @@
 import Cairo from 'cairo';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -32,6 +33,7 @@ const IFACE_XML = `
     <method name="FocusedWindow">
       <arg type="s" direction="out" name="wm_class"/>
       <arg type="s" direction="out" name="app_id"/>
+      <arg type="s" direction="out" name="client"/>
     </method>
   </interface>
 </node>`;
@@ -241,14 +243,17 @@ function drawOrb(cr, [r, g, b], s) {
 }
 
 // What xhisper needs to pick a paste key per app (Ctrl+V vs Ctrl+Shift+V in
-// terminals); on Wayland only the compositor knows the focused window.
+// terminals) and a clipboard tool (client "x11" for XWayland windows, where the
+// Wayland clipboard tools fail, else "wayland"); on Wayland only the compositor
+// knows the focused window.
 function focusedWindow() {
     const win = global.display.focus_window;
     if (!win)
-        return ['', ''];
+        return ['', '', ''];
     const wmClass = win.get_wm_class() || win.get_wm_class_instance() || '';
     const appId = Shell.WindowTracker.get_default().get_window_app(win)?.get_id() ?? '';
-    return [wmClass, appId];
+    const client = win.get_client_type() === Meta.WindowClientType.X11 ? 'x11' : 'wayland';
+    return [wmClass, appId, client];
 }
 
 export default class XhisperIndicatorExtension extends Extension {

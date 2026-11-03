@@ -54,15 +54,17 @@ gdbus call --session --dest org.gnome.Shell --object-path /io/github/elijahlynn/
 `Show` while already shown switches to the new color or style. `Hide` stops the
 animation and removes the overlay.
 
-`FocusedWindow()` returns `(s wm_class, s app_id)` for the focused window, so
-xhisper can pick a paste key per app (terminals paste with Ctrl+Shift+V). On
-Wayland only the compositor can see this. Both strings are empty when nothing has
-focus, including while the overview is open:
+`FocusedWindow()` returns `(s wm_class, s app_id, s client)` for the focused
+window, so xhisper can pick a paste key per app (terminals paste with
+Ctrl+Shift+V) and a clipboard tool (`client` is `x11` for XWayland windows, where
+the Wayland clipboard tools fail, else `wayland`). On Wayland only the compositor
+can see this. All strings are empty when nothing has focus, including while the
+overview is open:
 
 ```sh
 gdbus call --session --dest org.gnome.Shell --object-path /io/github/elijahlynn/XhisperIndicator \
   --method io.github.elijahlynn.XhisperIndicator.FocusedWindow
-# ('org.gnome.Console', 'org.gnome.Console.desktop')
+# ('org.gnome.Console', 'org.gnome.Console.desktop', 'wayland')
 ```
 
 `app_id` is the desktop file ID. If the window doesn't match a desktop file,

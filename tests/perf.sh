@@ -76,12 +76,11 @@ clipboard_fingerprint() {
 run_once() {
   local path="$1" focus extra_env=()
   if [ "$path" = x11 ]; then
-    focus="('dev.warp.Warp', 'dev.warp.Warp.desktop')"
-    echo dev.warp.Warp > "$W/cache/xhisper/x11-apps"   # Warp already learned as X11
+    focus="('dev.warp.Warp', 'dev.warp.Warp.desktop', 'x11')"
   else
-    focus="('org.gnome.TextEditor', 'org.gnome.TextEditor.desktop')"
-    : > "$W/cache/xhisper/x11-apps"
+    focus="('org.gnome.TextEditor', 'org.gnome.TextEditor.desktop', 'wayland')"
   fi
+  : > "$W/cache/xhisper/x11-apps"   # the extension's window type decides, not this list
   cp "$W/speech.wav" "$W/rt/xhisper.wav"
   "$W/bin/pw-record" 600 &
   echo $! > "$W/rt/xhisper-rec.pid"
