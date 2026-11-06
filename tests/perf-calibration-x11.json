@@ -1,0 +1,1433 @@
+{
+  "baseline_commit": "d8e555176abd46f9791ad631f7d72223acdda74e",
+  "current_sha256": "5ff071f0578df2aeea92f80936689b35e38c3f151f77ef50bce574b85e5ddbdd",
+  "metric": "script invocation to mock paste dispatch; not editor delivery",
+  "api": "mocked immediate response",
+  "min_latency_ms": 0,
+  "samples_per_round": 20,
+  "rounds": 2,
+  "focus": "('com.anthropic.Claude', 'com.anthropic.Claude.desktop', 'wayland')",
+  "samples": [
+    {
+      "round": 1,
+      "pair": 0,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 187.615
+    },
+    {
+      "round": 1,
+      "pair": 0,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 213.447
+    },
+    {
+      "round": 1,
+      "pair": 1,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 222.389
+    },
+    {
+      "round": 1,
+      "pair": 1,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 197.903
+    },
+    {
+      "round": 1,
+      "pair": 2,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 226.085
+    },
+    {
+      "round": 1,
+      "pair": 2,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 239.899
+    },
+    {
+      "round": 1,
+      "pair": 3,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 201.282
+    },
+    {
+      "round": 1,
+      "pair": 3,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 213.987
+    },
+    {
+      "round": 1,
+      "pair": 4,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 202.238
+    },
+    {
+      "round": 1,
+      "pair": 4,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 224.554
+    },
+    {
+      "round": 1,
+      "pair": 5,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 199.66
+    },
+    {
+      "round": 1,
+      "pair": 5,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 185.347
+    },
+    {
+      "round": 1,
+      "pair": 6,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 212.094
+    },
+    {
+      "round": 1,
+      "pair": 6,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 204.044
+    },
+    {
+      "round": 1,
+      "pair": 7,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 201.033
+    },
+    {
+      "round": 1,
+      "pair": 7,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 203.247
+    },
+    {
+      "round": 1,
+      "pair": 8,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 202.786
+    },
+    {
+      "round": 1,
+      "pair": 8,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 220.833
+    },
+    {
+      "round": 1,
+      "pair": 9,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 201.645
+    },
+    {
+      "round": 1,
+      "pair": 9,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 200.84
+    },
+    {
+      "round": 1,
+      "pair": 10,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 220.106
+    },
+    {
+      "round": 1,
+      "pair": 10,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 233.019
+    },
+    {
+      "round": 1,
+      "pair": 11,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 193.406
+    },
+    {
+      "round": 1,
+      "pair": 11,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 207.733
+    },
+    {
+      "round": 1,
+      "pair": 12,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 331.19
+    },
+    {
+      "round": 1,
+      "pair": 12,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 202.832
+    },
+    {
+      "round": 1,
+      "pair": 13,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 194.249
+    },
+    {
+      "round": 1,
+      "pair": 13,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 180.714
+    },
+    {
+      "round": 1,
+      "pair": 14,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 185.911
+    },
+    {
+      "round": 1,
+      "pair": 14,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 190.23
+    },
+    {
+      "round": 1,
+      "pair": 15,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 206.391
+    },
+    {
+      "round": 1,
+      "pair": 15,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 220.159
+    },
+    {
+      "round": 1,
+      "pair": 16,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 178.692
+    },
+    {
+      "round": 1,
+      "pair": 16,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 192.728
+    },
+    {
+      "round": 1,
+      "pair": 17,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 201.624
+    },
+    {
+      "round": 1,
+      "pair": 17,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 186.452
+    },
+    {
+      "round": 1,
+      "pair": 18,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 201.23
+    },
+    {
+      "round": 1,
+      "pair": 18,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 184.467
+    },
+    {
+      "round": 1,
+      "pair": 19,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 213.683
+    },
+    {
+      "round": 1,
+      "pair": 19,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 188.648
+    },
+    {
+      "round": 2,
+      "pair": 0,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 229.97
+    },
+    {
+      "round": 2,
+      "pair": 0,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 223.657
+    },
+    {
+      "round": 2,
+      "pair": 1,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 207.515
+    },
+    {
+      "round": 2,
+      "pair": 1,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 221.474
+    },
+    {
+      "round": 2,
+      "pair": 2,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 200.895
+    },
+    {
+      "round": 2,
+      "pair": 2,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 188.759
+    },
+    {
+      "round": 2,
+      "pair": 3,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 195.18
+    },
+    {
+      "round": 2,
+      "pair": 3,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 204.21
+    },
+    {
+      "round": 2,
+      "pair": 4,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 192.475
+    },
+    {
+      "round": 2,
+      "pair": 4,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 214.078
+    },
+    {
+      "round": 2,
+      "pair": 5,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 192.5
+    },
+    {
+      "round": 2,
+      "pair": 5,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 181.639
+    },
+    {
+      "round": 2,
+      "pair": 6,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 204.444
+    },
+    {
+      "round": 2,
+      "pair": 6,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 221.313
+    },
+    {
+      "round": 2,
+      "pair": 7,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 204.584
+    },
+    {
+      "round": 2,
+      "pair": 7,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 196.528
+    },
+    {
+      "round": 2,
+      "pair": 8,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 194.545
+    },
+    {
+      "round": 2,
+      "pair": 8,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 220.012
+    },
+    {
+      "round": 2,
+      "pair": 9,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 236.131
+    },
+    {
+      "round": 2,
+      "pair": 9,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 188.599
+    },
+    {
+      "round": 2,
+      "pair": 10,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 211.677
+    },
+    {
+      "round": 2,
+      "pair": 10,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 238.97
+    },
+    {
+      "round": 2,
+      "pair": 11,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 200.802
+    },
+    {
+      "round": 2,
+      "pair": 11,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 221.992
+    },
+    {
+      "round": 2,
+      "pair": 12,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 191.471
+    },
+    {
+      "round": 2,
+      "pair": 12,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 189.926
+    },
+    {
+      "round": 2,
+      "pair": 13,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 210.812
+    },
+    {
+      "round": 2,
+      "pair": 13,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 219.906
+    },
+    {
+      "round": 2,
+      "pair": 14,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 193.676
+    },
+    {
+      "round": 2,
+      "pair": 14,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 180.777
+    },
+    {
+      "round": 2,
+      "pair": 15,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 210.295
+    },
+    {
+      "round": 2,
+      "pair": 15,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 200.127
+    },
+    {
+      "round": 2,
+      "pair": 16,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 187.388
+    },
+    {
+      "round": 2,
+      "pair": 16,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 184.542
+    },
+    {
+      "round": 2,
+      "pair": 17,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 210.471
+    },
+    {
+      "round": 2,
+      "pair": 17,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 178.108
+    },
+    {
+      "round": 2,
+      "pair": 18,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 199.738
+    },
+    {
+      "round": 2,
+      "pair": 18,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 188.728
+    },
+    {
+      "round": 2,
+      "pair": 19,
+      "path": "x11",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 182.68
+    },
+    {
+      "round": 2,
+      "pair": 19,
+      "path": "x11",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "xclip 0",
+        "xclip 0",
+        "xhisperclip 0",
+        "xclip 0"
+      ],
+      "error": "",
+      "dispatch_ms": 192.644
+    }
+  ],
+  "summary": {
+    "wayland/baseline": {
+      "overall": null,
+      "rounds": [
+        null,
+        null
+      ]
+    },
+    "wayland/current": {
+      "overall": null,
+      "rounds": [
+        null,
+        null
+      ]
+    },
+    "x11/baseline": {
+      "overall": {
+        "count": 40,
+        "median_ms": 202.51,
+        "p95_ms": 236.13,
+        "mad_ms": 13.77
+      },
+      "rounds": [
+        {
+          "count": 20,
+          "median_ms": 201.73,
+          "p95_ms": 226.09,
+          "mad_ms": 13.6
+        },
+        {
+          "count": 20,
+          "median_ms": 206.05,
+          "p95_ms": 236.13,
+          "mad_ms": 14.61
+        }
+      ]
+    },
+    "x11/current": {
+      "overall": {
+        "count": 40,
+        "median_ms": 201.16,
+        "p95_ms": 229.97,
+        "mad_ms": 8.6
+      },
+      "rounds": [
+        {
+          "count": 20,
+          "median_ms": 202.24,
+          "p95_ms": 233.02,
+          "mad_ms": 9.17
+        },
+        {
+          "count": 20,
+          "median_ms": 198.13,
+          "p95_ms": 221.99,
+          "mad_ms": 6.49
+        }
+      ]
+    }
+  },
+  "original_clipboard_restored": true
+}

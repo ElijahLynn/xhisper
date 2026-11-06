@@ -110,8 +110,23 @@ Silent recordings are ignored with a "No sound detected" notification. Failed
 transcriptions show "Transcription failed".
 
 ```sh
-xhisper --log   # show the log: transcriptions, per-step timing, warnings
+xhisper --log   # show diagnostics, per-step timing, and warnings
 ```
+
+Each transcription attempt writes a JSON diagnostic record with a UTC start time,
+attempt ID, outcome, model, audio duration/size, elapsed and request time, curl
+exit code, HTTP status, and bounded API/transport error details. Outcomes distinguish transport
+errors, API errors, invalid responses, empty transcriptions, and success. New
+records contain no transcript text, audio, or authorization header. API error
+messages are limited to 512 characters and the configured API key is redacted.
+Temporary response files are private and removed when the attempt exits.
+The log is owner-only and rotates at approximately 1 MiB, retaining one previous
+generation (`/tmp/xhisper.log.1`). Existing legacy entries may still contain
+transcript text until rotated out. Failed audio is not retained.
+
+Run `make check` for isolated diagnostic regression tests (no API key, network,
+or clipboard access). `make perf` is the separate offline application gate;
+`make perf-live` explicitly benchmarks live Groq requests.
 
 **Non-QWERTY layouts:** set up a key that switches your input to QWERTY, then bind
 `xhisper --rightalt` (or `--leftalt`, `--leftctrl`, `--rightctrl`, `--leftshift`,
@@ -185,7 +200,7 @@ Goal: every dictation feels the same and lands within **0.5 s** of the stop key
 press, in any app. `min-latency` (450 ms) pads the faster path so a GUI app and a
 terminal feel identical.
 
-Measured by `make perf` (median of 5 runs each, real Groq transcription):
+Earlier live measurements (median of 5 runs each, real Groq transcription):
 
 | Path | Median | What differs |
 |---|---|---|
@@ -200,21 +215,59 @@ slower. Compressing audio before upload doesn't help.
 
 ### Performance gate
 
-`tests/perf.sh` runs the real script end to end against both clipboard paths and
-fails if either median exceeds 500 ms or the paths differ by more than 50 ms. It
-never pastes or types anything (a stand-in `xhispertool` records when the paste key
-would be sent). The X11 path runs against a private Xvfb server; the Wayland path
-uses your session's clipboard (GNOME's `wl-copy` needs a keyboard seat) and checks
-that your clipboard is unchanged afterwards. Needs `espeak-ng`, `xorg-server-xvfb`
-and a Groq key.
+`make perf` runs the real application script with synthetic audio, an immediate
+mock API response, and pacing disabled. It runs 20 samples per path and checks
+separate median/p95 limits from `tests/perf-budget.json`, never regenerating them
+from current-code results. It needs no Groq key and never sources `~/.env`.
+The limits are provisional noise estimates from old-code samples, not a portable
+latency guarantee. An independent validation has exceeded these pilot limits even
+with correct delivery; do not bypass a failure or interpret it as proof of a code
+regression without examining the retained samples.
+
+- **Native Wayland:** a disposable headless GNOME Shell with its own profile,
+  runtime directory, socket, and session bus. Xwayland is disabled and any X11
+  clipboard fallback is rejected. The real script saves/stages/restores a
+  synthetic clipboard, and a virtual keyboard sends Ctrl+V into a disposable
+  GTK editor. Every sample must contain the exact expected text and restore the
+  fixture. The production uinput daemon is replaced at its key-dispatch seam.
+- **X11:** real `xhisperclip`/`xclip` against private Xvfb, with clipboard
+  restoration and paste-dispatch checks. It does not verify editor delivery.
+
+The timed metric ends at key dispatch, not GTK delivery. Both tests keep the
+desktop clipboard untouched. Additional test dependencies include GNOME Shell,
+Python GObject introspection with GTK4, `espeak-ng`, Xvfb, `dbus-run-session`,
+and the application's normal tools. Test compositor versions are listed in
+`tests/wayland-session.sh`.
 
 ```sh
 make perf     # run it
+make perf-live # five live requests per path, normal 450ms pacing
+make test-wayland # 20 real GTK pastes at the existing 40ms delay
 make hooks    # once per clone: run it before every commit that touches the code
 ```
 
-The pre-commit hook blocks commits that regress. Skip it once, deliberately, with
-`XHISPER_SKIP_PERF=1 git commit ...`.
+`make perf-live` reports request latency and invocation-to-paste dispatch
+separately, including every sample and each median/p95. Request time includes
+network/upload/provider latency, not pure Groq compute. Never subtract it from
+the total: clipboard saving overlaps the request. The 500ms live target is
+informational and cannot block a commit; API or correctness failures still fail
+the benchmark. Only synthetic speech is submitted.
+
+`tests/calibrate-perf.py` compares pinned commit
+`d8e555176abd46f9791ad631f7d72223acdda74e` with the working script in alternating
+order, two rounds of 20 samples per version. Raw evidence is stored in
+`tests/perf-calibration-{wayland,x11}.json`. Limits use the 99th percentile of
+10,000 seeded, baseline-only bootstrap batches of 20 (nearest-rank p95).
+This small pilot does not model long-term system load or compositor jitter.
+
+For explicit delay experiments, run the probe through
+`bash tests/wayland-session.sh python3 tests/paste-delay.py --delays 0 10 20 40 --runs 10 --output /tmp/xhisper-paste.json`.
+Any lost paste fails the probe. It records the interval from `wl-copy` return to
+virtual-key enqueue: D-Bus adds latency, so 0ms sleep is not immediate production
+dispatch and cannot justify removing the 40ms focus-return delay.
+
+The pre-commit hook runs `make check` and the offline gate for code/test changes.
+Failures preserve structured evidence in the printed temporary directory.
 
 ### Next steps to make it feel local
 

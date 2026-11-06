@@ -1,14 +1,15 @@
 #!/bin/bash
-# Block commits that make dictation slower than 500 ms (see tests/perf.sh).
+# Gate local application latency independently of Groq (see tests/perf.sh).
 # Runs only when code that affects latency is staged. Skip once, deliberately, with
 #   XHISPER_SKIP_PERF=1 git commit ...
-git diff --cached --name-only | grep -qE '^(xhisper\.sh|xhispertool\.c|Makefile|tests/)' || exit 0
+git --no-pager diff --cached --name-only | grep -qE '^(xhisper\.sh|xhispertool\.c|xhisperclip\.c|Makefile|tests/|\.githooks/)' || exit 0
 if [ -n "${XHISPER_SKIP_PERF:-}" ]; then
   echo "pre-commit: performance gate SKIPPED (XHISPER_SKIP_PERF set)" >&2
   exit 0
 fi
-echo "pre-commit: running performance gate (tests/perf.sh)..." >&2
+make check || exit 1
+echo "pre-commit: running local performance gate (tests/perf.sh)..." >&2
 if ! bash tests/perf.sh; then
-  echo "pre-commit: commit blocked: dictation latency regressed (limit 500 ms, max 50 ms between paths)." >&2
+  echo "pre-commit: commit blocked: isolated local gate failed; frozen per-path median/p95 limits are in tests/perf-budget.json. No live API calls." >&2
   exit 1
 fi

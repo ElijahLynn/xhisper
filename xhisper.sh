@@ -257,7 +257,7 @@ wayland_tools_ok() {
 clip_set() {
   local text="$1"
   if [ "$CLIP_XCLIP_ONLY" -eq 0 ] && command -v wl-copy >/dev/null 2>&1 &&
-     printf '%s' "$text" | timeout 0.3 wl-copy --sensitive 2>/dev/null; then
+     printf '%s' "$text" | timeout 0.3 wl-copy --sensitive --type 'text/plain;charset=utf-8' 2>/dev/null; then
     return 0
   fi
   [ "$CLIP_XCLIP_ONLY" -eq 0 ] && remember_x11_app
@@ -431,39 +431,83 @@ is_silent() {
   return 1
 }
 
-logging_end_and_write_to_logfile() {
-  local title="$1"
-  local result="$2"
-  local logging_start="$3"
-
-  local logging_end=$(date +%s%N)
-  local time=$(echo "scale=3; ($logging_end - $logging_start) / 1000000000" | bc)
-
-  echo "=== $title ===" >> "$LOGFILE"
-  echo "Result: [$result]" >> "$LOGFILE"
-  echo "Time: ${time}s" >> "$LOGFILE"
-}
-
-transcribe() {
+transcribe() (
+  # Isolate cleanup from the caller's clipboard trap. Response bodies are temporary,
+  # private, and never logged; only bounded diagnostic fields survive.
+  umask 077
   local recording="$1"
   local logging_start=$(date +%s%N)
+  local request_dir
+  request_dir=$(mktemp --directory "$RUNTIME_DIR/xhisper-request.XXXXXX") || return 1
+  trap 'rm -rf -- "$request_dir"' EXIT
+  trap 'exit 1' TERM INT
+  local attempt="${request_dir##*.}" timestamp
+  timestamp=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+  local audio_bytes duration
+  audio_bytes=$(stat --format=%s "$recording")
+  duration=$(get_duration "$recording")
 
   # Use large model for longer recordings, turbo for short ones
-  local is_long_recording=$(echo "$(get_duration "$recording") > $long_recording_threshold" | bc -l)
+  local is_long_recording=$(echo "$duration > $long_recording_threshold" | bc -l)
   local model=$([[ $is_long_recording -eq 1 ]] && echo "whisper-large-v3" || echo "whisper-large-v3-turbo")
 
-  local transcription=$(curl -s -X POST "https://api.groq.com/openai/v1/audio/transcriptions" \
-    -H "Authorization: Bearer $GROQ_API_KEY" \
-    -H "Content-Type: multipart/form-data" \
-    -F "file=@$recording" \
-    -F "model=$model" \
-    -F "prompt=$transcription_prompt" \
-    | jq -r '.text' | sed 's/^ //') # Transcription always returns a leading space, so remove it via sed
-
-  logging_end_and_write_to_logfile "Transcription" "$transcription" "$logging_start"
-
-  echo "$transcription"
-}
+  local http_status curl_exit transcription="" outcome api_code="" error=""
+  local request_start=$(date +%s%N) request_ms
+  http_status=$(curl --silent --show-error --request POST \
+    "https://api.groq.com/openai/v1/audio/transcriptions" \
+    --header "Authorization: Bearer $GROQ_API_KEY" \
+    --header "Content-Type: multipart/form-data" \
+    --form "file=@$recording" \
+    --form "model=$model" \
+    --form "prompt=$transcription_prompt" \
+    --output "$request_dir/response" --write-out '%{http_code}' \
+    2>"$request_dir/error")
+  curl_exit=$?
+  request_ms=$(( ($(date +%s%N) - request_start) / 1000000 ))
+  if [ "$curl_exit" -ne 0 ]; then
+    outcome=transport_error
+    error=$(<"$request_dir/error")
+  elif [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    outcome=api_error
+    api_code=$(jq -r '.error.code // .error.type // "" | strings' "$request_dir/response" 2>/dev/null)
+    error=$(jq -r '.error.message // "" | strings' "$request_dir/response" 2>/dev/null)
+  elif ! jq --exit-status 'type == "object" and (has("text")) and
+      (.text == null or (.text | type == "string"))' "$request_dir/response" >/dev/null 2>&1; then
+    outcome=invalid_response
+  else
+    transcription=$(jq -r '.text // "" | sub("^ "; "")' "$request_dir/response")
+    if [[ -z "${transcription//[[:space:]]/}" ]]; then
+      outcome=empty_transcription
+    else
+      outcome=success
+    fi
+  fi
+  # Redact the credential even if a remote error unexpectedly echoes it.
+  if [ -n "$GROQ_API_KEY" ]; then
+    error="${error//"$GROQ_API_KEY"/[REDACTED]}"
+    api_code="${api_code//"$GROQ_API_KEY"/[REDACTED]}"
+  fi
+  local elapsed_ms=$(( ($(date +%s%N) - logging_start) / 1000000 ))
+  # Keep the current log and one previous generation, approximately 1 MiB each.
+  if [ -f "$LOGFILE" ] && [ "$(stat --format=%s "$LOGFILE")" -ge 1048576 ]; then
+    mv --force -- "$LOGFILE" "$LOGFILE.1"
+    chmod 600 "$LOGFILE.1"
+  fi
+  touch "$LOGFILE"
+  chmod 600 "$LOGFILE"
+  jq --null-input --compact-output \
+    --arg timestamp "$timestamp" --arg attempt "$attempt" --arg outcome "$outcome" \
+    --arg model "$model" --arg http_status "$http_status" \
+    --arg api_code "${api_code:0:128}" --arg error "${error:0:512}" \
+    --argjson curl_exit "$curl_exit" --argjson elapsed_ms "$elapsed_ms" --argjson request_ms "$request_ms" \
+    --argjson audio_seconds "$duration" --argjson audio_bytes "$audio_bytes" \
+    '{timestamp:$timestamp,attempt:$attempt,outcome:$outcome,model:$model,
+      http_status:$http_status,curl_exit:$curl_exit,elapsed_ms:$elapsed_ms,request_ms:$request_ms,
+      audio_seconds:$audio_seconds,audio_bytes:$audio_bytes,
+      api_code:$api_code,error:$error}' >> "$LOGFILE"
+  [ "$outcome" = success ] || return 1
+  printf '%s\n' "$transcription"
+)
 
 # Main
 

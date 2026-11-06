@@ -1,0 +1,31 @@
+{
+  "status": "provisional",
+  "baseline_commit": "d8e555176abd46f9791ad631f7d72223acdda74e",
+  "evidence": {
+    "x11": "tests/perf-calibration-x11.json",
+    "wayland": "tests/perf-calibration-wayland.json"
+  },
+  "metric": "script invocation to mock paste dispatch, not editor delivery",
+  "api": "immediate mock",
+  "pacing": "disabled",
+  "batch_size": 20,
+  "method": "99th percentile of 10000 bootstrap batches; seed=0; baseline only",
+  "budgets": {
+    "x11": {
+      "median_ms": 214,
+      "p95_ms": 332
+    },
+    "wayland": {
+      "median_ms": 372,
+      "p95_ms": 430
+    }
+  },
+  "caveats": [
+    "Pilot thresholds from two rounds, not a long-term false-positive guarantee.",
+    "The p95 allowance is particularly uncertain with only 40 baseline samples.",
+    "Wayland uses private headless Mutter with Xwayland disabled and actual GTK delivery checks.",
+    "X11 uses private Xvfb and mocked key dispatch, not editor delivery.",
+    "Isolated compositor timings are not live-desktop latency estimates.",
+    "Never regenerate these thresholds from the code being evaluated."
+  ]
+}

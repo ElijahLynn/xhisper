@@ -36,7 +36,22 @@ clean:
 perf:
 	bash tests/perf.sh
 
+perf-live:
+	bash tests/perf.sh --live
+
+test-wayland:
+	bash tests/wayland-session.sh
+
+check:
+	bash -n xhisper.sh
+	bash -n tests/perf.sh
+	bash -n tests/wayland-session.sh
+	bash -n .githooks/pre-commit
+	python3 tests/transcription.py
+	python3 tests/clipboard.py
+	python3 tests/calibration-stats.py
+
 hooks:
 	git config core.hooksPath .githooks
 
-.PHONY: all install uninstall clean perf hooks
+.PHONY: all install uninstall clean perf perf-live test-wayland check hooks

@@ -1,0 +1,1514 @@
+{
+  "baseline_commit": "d8e555176abd46f9791ad631f7d72223acdda74e",
+  "current_sha256": "5ff071f0578df2aeea92f80936689b35e38c3f151f77ef50bce574b85e5ddbdd",
+  "metric": "script invocation to mock paste dispatch; not editor delivery",
+  "api": "mocked immediate response",
+  "min_latency_ms": 0,
+  "samples_per_round": 20,
+  "rounds": 2,
+  "focus": "(true, '\"org.xhisper.PasteProbe\"')",
+  "samples": [
+    {
+      "round": 1,
+      "pair": 0,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 263.624
+    },
+    {
+      "round": 1,
+      "pair": 0,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 263.405
+    },
+    {
+      "round": 1,
+      "pair": 1,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 213.238
+    },
+    {
+      "round": 1,
+      "pair": 1,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 305.967
+    },
+    {
+      "round": 1,
+      "pair": 2,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 369.761
+    },
+    {
+      "round": 1,
+      "pair": 2,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 288.548
+    },
+    {
+      "round": 1,
+      "pair": 3,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 360.947
+    },
+    {
+      "round": 1,
+      "pair": 3,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 348.42
+    },
+    {
+      "round": 1,
+      "pair": 4,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 296.255
+    },
+    {
+      "round": 1,
+      "pair": 4,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 324.798
+    },
+    {
+      "round": 1,
+      "pair": 5,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 300.405
+    },
+    {
+      "round": 1,
+      "pair": 5,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 352.392
+    },
+    {
+      "round": 1,
+      "pair": 6,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 334.381
+    },
+    {
+      "round": 1,
+      "pair": 6,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 349.118
+    },
+    {
+      "round": 1,
+      "pair": 7,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 360.84
+    },
+    {
+      "round": 1,
+      "pair": 7,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 333.56
+    },
+    {
+      "round": 1,
+      "pair": 8,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 354.636
+    },
+    {
+      "round": 1,
+      "pair": 8,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 331.746
+    },
+    {
+      "round": 1,
+      "pair": 9,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 315.142
+    },
+    {
+      "round": 1,
+      "pair": 9,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 383.398
+    },
+    {
+      "round": 1,
+      "pair": 10,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 417.857
+    },
+    {
+      "round": 1,
+      "pair": 10,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 270.734
+    },
+    {
+      "round": 1,
+      "pair": 11,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 320.346
+    },
+    {
+      "round": 1,
+      "pair": 11,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 355.564
+    },
+    {
+      "round": 1,
+      "pair": 12,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 355.988
+    },
+    {
+      "round": 1,
+      "pair": 12,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 323.794
+    },
+    {
+      "round": 1,
+      "pair": 13,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 335.265
+    },
+    {
+      "round": 1,
+      "pair": 13,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 371.039
+    },
+    {
+      "round": 1,
+      "pair": 14,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 338.081
+    },
+    {
+      "round": 1,
+      "pair": 14,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 321.383
+    },
+    {
+      "round": 1,
+      "pair": 15,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 564.652
+    },
+    {
+      "round": 1,
+      "pair": 15,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 323.254
+    },
+    {
+      "round": 1,
+      "pair": 16,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 400.87
+    },
+    {
+      "round": 1,
+      "pair": 16,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 267.493
+    },
+    {
+      "round": 1,
+      "pair": 17,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 283.376
+    },
+    {
+      "round": 1,
+      "pair": 17,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 390.119
+    },
+    {
+      "round": 1,
+      "pair": 18,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 332.902
+    },
+    {
+      "round": 1,
+      "pair": 18,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 365.857
+    },
+    {
+      "round": 1,
+      "pair": 19,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 354.004
+    },
+    {
+      "round": 1,
+      "pair": 19,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 360.691
+    },
+    {
+      "round": 2,
+      "pair": 0,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 354.841
+    },
+    {
+      "round": 2,
+      "pair": 0,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 410.683
+    },
+    {
+      "round": 2,
+      "pair": 1,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 381.808
+    },
+    {
+      "round": 2,
+      "pair": 1,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 277.694
+    },
+    {
+      "round": 2,
+      "pair": 2,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 306.936
+    },
+    {
+      "round": 2,
+      "pair": 2,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 352.995
+    },
+    {
+      "round": 2,
+      "pair": 3,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 353.507
+    },
+    {
+      "round": 2,
+      "pair": 3,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 319.644
+    },
+    {
+      "round": 2,
+      "pair": 4,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 303.508
+    },
+    {
+      "round": 2,
+      "pair": 4,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 334.517
+    },
+    {
+      "round": 2,
+      "pair": 5,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 351.681
+    },
+    {
+      "round": 2,
+      "pair": 5,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 323.027
+    },
+    {
+      "round": 2,
+      "pair": 6,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 319.116
+    },
+    {
+      "round": 2,
+      "pair": 6,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 337.296
+    },
+    {
+      "round": 2,
+      "pair": 7,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 350.695
+    },
+    {
+      "round": 2,
+      "pair": 7,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 345.652
+    },
+    {
+      "round": 2,
+      "pair": 8,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 277.8
+    },
+    {
+      "round": 2,
+      "pair": 8,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 377.091
+    },
+    {
+      "round": 2,
+      "pair": 9,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 334.643
+    },
+    {
+      "round": 2,
+      "pair": 9,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 266.088
+    },
+    {
+      "round": 2,
+      "pair": 10,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 324.88
+    },
+    {
+      "round": 2,
+      "pair": 10,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 386.28
+    },
+    {
+      "round": 2,
+      "pair": 11,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 367.525
+    },
+    {
+      "round": 2,
+      "pair": 11,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 338.482
+    },
+    {
+      "round": 2,
+      "pair": 12,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 350.809
+    },
+    {
+      "round": 2,
+      "pair": 12,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 429.844
+    },
+    {
+      "round": 2,
+      "pair": 13,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 352.288
+    },
+    {
+      "round": 2,
+      "pair": 13,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 320.934
+    },
+    {
+      "round": 2,
+      "pair": 14,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 487.705
+    },
+    {
+      "round": 2,
+      "pair": 14,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 331.917
+    },
+    {
+      "round": 2,
+      "pair": 15,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 332.801
+    },
+    {
+      "round": 2,
+      "pair": 15,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 285.202
+    },
+    {
+      "round": 2,
+      "pair": 16,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 347.676
+    },
+    {
+      "round": 2,
+      "pair": 16,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 336.547
+    },
+    {
+      "round": 2,
+      "pair": 17,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 350.634
+    },
+    {
+      "round": 2,
+      "pair": 17,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 285.424
+    },
+    {
+      "round": 2,
+      "pair": 18,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 287.076
+    },
+    {
+      "round": 2,
+      "pair": 18,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 371.878
+    },
+    {
+      "round": 2,
+      "pair": 19,
+      "path": "wayland",
+      "version": "baseline",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 336.581
+    },
+    {
+      "round": 2,
+      "pair": 19,
+      "path": "wayland",
+      "version": "current",
+      "valid": true,
+      "restored": true,
+      "exit": 0,
+      "routes": [
+        "wl-paste 0",
+        "wl-paste 0",
+        "wl-copy 0",
+        "wl-copy 0"
+      ],
+      "delivered": true,
+      "error": "",
+      "dispatch_ms": 284.941
+    }
+  ],
+  "complete": true,
+  "isolation": "private headless Mutter; X11 forbidden",
+  "delivery": "actual GTK buffer",
+  "mode": "calibration",
+  "summary": {
+    "wayland/baseline": {
+      "overall": {
+        "count": 40,
+        "median_ms": 352.34,
+        "p95_ms": 410.68,
+        "mad_ms": 17.89
+      },
+      "rounds": [
+        {
+          "count": 20,
+          "median_ms": 353.51,
+          "p95_ms": 400.87,
+          "mad_ms": 19.54
+        },
+        {
+          "count": 20,
+          "median_ms": 351.98,
+          "p95_ms": 410.68,
+          "mad_ms": 16.44
+        }
+      ]
+    },
+    "wayland/current": {
+      "overall": {
+        "count": 40,
+        "median_ms": 320.64,
+        "p95_ms": 365.86,
+        "mad_ms": 31.13
+      },
+      "rounds": [
+        {
+          "count": 20,
+          "median_ms": 322.59,
+          "p95_ms": 365.86,
+          "mad_ms": 32.73
+        },
+        {
+          "count": 20,
+          "median_ms": 319.38,
+          "p95_ms": 354.84,
+          "mad_ms": 29.86
+        }
+      ]
+    }
+  },
+  "provisional_budgets": {
+    "wayland": {
+      "status": "provisional",
+      "batch_size": 20,
+      "median_ms": 372,
+      "p95_ms": 430,
+      "method": "99th percentile of 10000 bootstrap batches; seed=0; baseline only",
+      "caveat": "Two rounds do not establish long-term noise; p95 especially uncertain"
+    },
+    "x11": null
+  },
+  "fixture_restored": true
+}
