@@ -120,6 +120,26 @@ errors, API errors, invalid responses, empty transcriptions, and success. New
 records contain no transcript text, audio, or authorization header. API error
 messages are limited to 512 characters and the configured API key is redacted.
 Temporary response files are private and removed when the attempt exits.
+
+`request_timing` adds numeric curl phases in milliseconds: DNS, TCP connection,
+TLS, transfer setup, upload, upstream wait after upload, and response download.
+`upload_complete_ms`, `first_byte_ms`, and `total_ms` are cumulative curl offsets,
+not additional phases. The existing `request_ms` includes curl process overhead.
+Upstream wait includes network/edge/provider waiting, not pure Groq compute;
+upload timing can include HTTP setup/100-Continue delays. Missing, unfinished,
+or inconsistent intervals are `null`, not zero or a failed transcription.
+Measured durations round to the nearest millisecond, so a very fast measured
+phase can be zero. Upload completion means the last byte was sent by libcurl,
+not that the remote server acknowledged receipt.
+Upload-completion timing requires curl 8.10 or later; older versions retain the
+other measurements. Only the named timing values are captured, never a full
+curl metadata dump, headers, or request body.
+
+The `Timing:` line separates `silence`, `focus`, and `clipboard-save` instead of
+combining them. These overlap the transcription request and must not be added to
+request time. Stage marks use Bash's built-in clock when available to avoid
+launching a process per mark, with `date` as the older-Bash fallback.
+The normal 450ms pacing floor and 40ms Wayland focus delay are unchanged.
 The log is owner-only and rotates at approximately 1 MiB, retaining one previous
 generation (`/tmp/xhisper.log.1`). Existing legacy entries may still contain
 transcript text until rotated out. Failed audio is not retained.
@@ -252,6 +272,11 @@ network/upload/provider latency, not pure Groq compute. Never subtract it from
 the total: clipboard saving overlaps the request. The 500ms live target is
 informational and cannot block a commit; API or correctness failures still fail
 the benchmark. Only synthetic speech is submitted.
+
+It also reports each request phase and local stage, with per-phase median/p95
+and a count of available measurements in the retained JSON. Successful live
+runs retain both result files in the printed private temporary directory;
+unavailable phases are excluded from statistics rather than counted as zero.
 
 `tests/calibrate-perf.py` compares pinned commit
 `d8e555176abd46f9791ad631f7d72223acdda74e` with the working script in alternating

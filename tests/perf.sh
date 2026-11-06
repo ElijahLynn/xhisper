@@ -24,7 +24,7 @@ done
 [ -x "$REPO/xhisperclip" ] || { printf 'Build xhisperclip first (make xhisperclip).\n' >&2; exit 2; }
 W=$(mktemp --directory /tmp/xhperf.XXXXXX)
 cleanup() {
-  if [ "$status" = 0 ]; then
+  if [ "$status" = 0 ] && [ "$MODE" != --live ]; then
     rm --recursive --force -- "$W"
   else
     printf 'Performance evidence retained in %s\n' "$W" >&2

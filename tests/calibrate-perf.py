@@ -13,6 +13,7 @@ import math
 import os
 from pathlib import Path
 import random
+import re
 import shutil
 import statistics
 import subprocess
@@ -26,6 +27,14 @@ REPO = Path(__file__).resolve().parents[1]
 FIXTURE = b"xhisper calibration clipboard fixture"
 TRANSCRIPT = "xhisper synthetic calibration transcription"
 NATIVE = os.environ.get("XHISPER_NESTED") == "1"
+LOCAL_PHASES = (
+    "startup", "stop", "transcribe-start", "silence", "focus", "clipboard-save",
+    "transcribe-wait", "clipboard", "pad", "paste+restore",
+)
+REQUEST_PHASES = (
+    "dns_ms", "tcp_connect_ms", "tls_ms", "transfer_setup_ms", "upload_ms",
+    "upstream_wait_ms", "download_ms", "upload_complete_ms", "first_byte_ms", "total_ms",
+)
 
 
 def run(arguments, **kwargs):
@@ -108,6 +117,24 @@ def derive_budgets(samples):
 def within_budget(stats, limits):
     return (stats is not None and limits is not None
             and all(stats[metric] <= limits[metric] for metric in ("median_ms", "p95_ms")))
+
+
+def parse_local_timing(stages):
+    return {name: int(value) for name, value in re.findall(r"(\S+)=(\d+)ms", stages)
+            if name in LOCAL_PHASES}
+
+
+def phase_summary(samples, group, names):
+    return {name: describe([sample.get(group, {}).get(name) for sample in samples
+                            if isinstance(sample.get(group, {}).get(name), (int, float))])
+            for name in names}
+
+
+def print_phase_summary(label, summary):
+    values = ", ".join(f"{name}={stats['median_ms']}/{stats['p95_ms']}"
+                       for name, stats in summary.items() if stats is not None)
+    if values:
+        print(f"{label} median/p95 (ms): {values}", flush=True)
 
 
 def main():
@@ -357,6 +384,9 @@ exit "$rc"
                             # Private compositor focus is verified on the Wayland path.
                             valid = (process.returncode == 0 and len(keys) == 2
                                      and keys[0] == expected_key)
+                            local_ms = parse_local_timing(stages)
+                            if version == "current":
+                                valid &= {"silence", "focus", "clipboard-save"} <= local_ms.keys()
                             if path == "wayland":
                                 valid &= (focus() == expected_focus
                                           and "wl-copy 0" in routes and "wl-paste 0" in routes
@@ -380,6 +410,8 @@ exit "$rc"
                                 "restored": restored, "exit": process.returncode, "routes": routes,
                                 "delivered": delivered,
                                 "request_ms": diagnostic.get("request_ms"),
+                                "request_timing": diagnostic.get("request_timing", {}),
+                                "local_ms": local_ms,
                                 "outcome": diagnostic.get("outcome"),
                                 "stages": stages,
                                 "error": process.stderr.decode(errors="replace")[:1000],
@@ -391,6 +423,8 @@ exit "$rc"
                                 print(f"{path} {pair + 1}: dispatch={sample['dispatch_ms']}ms "
                                       f"request={sample['request_ms']}ms "
                                       f"outcome={sample['outcome']} valid={bool(valid)}", flush=True)
+                                print(f"  phases={json.dumps(sample['request_timing'], sort_keys=True)} "
+                                      f"local_ms={json.dumps(local_ms, sort_keys=True)}", flush=True)
                             if not valid:
                                 print("REJECTED", json.dumps(sample), flush=True)
                                 if not routes:
@@ -414,13 +448,22 @@ exit "$rc"
                         "overall": describe([sample["dispatch_ms"] for sample in samples]),
                         "request": describe([sample["request_ms"] for sample in samples
                                              if sample["request_ms"] is not None]),
+                        "request_timing": phase_summary(samples, "request_timing", REQUEST_PHASES),
+                        "local_ms": phase_summary(samples, "local_ms", LOCAL_PHASES),
                         "rounds": [
                             describe([sample["dispatch_ms"] for sample in samples
                                       if sample["round"] == round_number + 1])
                             for round_number in range(args.rounds)
                         ],
                     }
-            print(json.dumps(result["summary"], indent=2), flush=True)
+            print(json.dumps({
+                label: {key: value for key, value in summary.items()
+                        if key not in ("request_timing", "local_ms")}
+                for label, summary in result["summary"].items()
+            }, indent=2), flush=True)
+            for label, summary in result["summary"].items():
+                print_phase_summary(f"{label} request phases", summary["request_timing"])
+                print_phase_summary(f"{label} local stages", summary["local_ms"])
             if current_only:
                 for sample in sorted(result["samples"],
                                      key=lambda item: item["dispatch_ms"] or 0,

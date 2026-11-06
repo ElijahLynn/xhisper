@@ -81,6 +81,22 @@ class CalibrationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("desktop access is forbidden", result.stderr)
 
+    def test_local_phase_parser_keeps_distinct_stages_only(self):
+        stages = ("Timing: startup=2ms silence=31ms focus=3ms clipboard-save=21ms "
+                  "transcribe-wait=200ms total=600ms (43 chars)")
+        self.assertEqual(calibration.parse_local_timing(stages),
+                         {"startup": 2, "silence": 31, "focus": 3,
+                          "clipboard-save": 21, "transcribe-wait": 200})
+
+    def test_phase_summary_does_not_turn_missing_data_into_zero(self):
+        summary = calibration.phase_summary(
+            [{"request_timing": {"dns_ms": 10, "upstream_wait_ms": None}},
+             {"request_timing": {"dns_ms": 20}}, {}],
+            "request_timing", ("dns_ms", "upstream_wait_ms"))
+        self.assertEqual(summary["dns_ms"]["count"], 2)
+        self.assertEqual(summary["dns_ms"]["median_ms"], 15)
+        self.assertIsNone(summary["upstream_wait_ms"])
+
 
 if __name__ == "__main__":
     unittest.main()

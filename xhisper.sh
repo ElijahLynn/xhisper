@@ -452,18 +452,24 @@ transcribe() (
   local model=$([[ $is_long_recording -eq 1 ]] && echo "whisper-large-v3" || echo "whisper-large-v3-turbo")
 
   local http_status curl_exit transcription="" outcome api_code="" error=""
+  local curl_output curl_times=""
   local request_start=$(date +%s%N) request_ms
-  http_status=$(curl --silent --show-error --request POST \
+  curl_output=$(curl --silent --show-error --request POST \
     "https://api.groq.com/openai/v1/audio/transcriptions" \
     --header "Authorization: Bearer $GROQ_API_KEY" \
     --header "Content-Type: multipart/form-data" \
     --form "file=@$recording" \
     --form "model=$model" \
     --form "prompt=$transcription_prompt" \
-    --output "$request_dir/response" --write-out '%{http_code}' \
+    --output "$request_dir/response" \
+    --write-out '%{http_code}\n%{time_namelookup}\t%{time_connect}\t%{time_appconnect}\t%{time_pretransfer}\t%{time_posttransfer}\t%{time_starttransfer}\t%{time_total}' \
     2>"$request_dir/error")
   curl_exit=$?
   request_ms=$(( ($(date +%s%N) - request_start) / 1000000 ))
+  http_status=${curl_output%%$'\n'*}
+  # Older curl lacks time_posttransfer (added in 8.10). Missing/malformed timing
+  # fields are null, never a transcription failure or invented server duration.
+  [[ "$curl_output" = *$'\n'* ]] && curl_times=${curl_output#*$'\n'}
   if [ "$curl_exit" -ne 0 ]; then
     outcome=transport_error
     error=$(<"$request_dir/error")
@@ -501,10 +507,30 @@ transcribe() (
     --arg api_code "${api_code:0:128}" --arg error "${error:0:512}" \
     --argjson curl_exit "$curl_exit" --argjson elapsed_ms "$elapsed_ms" --argjson request_ms "$request_ms" \
     --argjson audio_seconds "$duration" --argjson audio_bytes "$audio_bytes" \
-    '{timestamp:$timestamp,attempt:$attempt,outcome:$outcome,model:$model,
+    --arg curl_times "$curl_times" \
+    'def milliseconds: if . == null then null else round end;
+     def reached: if . != null and . > 0 then . else null end;
+     def interval($end; $start):
+       if $end != null and $start != null and $end >= $start
+       then ($end - $start | round) else null end;
+     ($curl_times | split("\t") | map(
+       if test("^[0-9]+(\\.[0-9]+)?$") then (tonumber * 1000) else null end)) as $t |
+     {timestamp:$timestamp,attempt:$attempt,outcome:$outcome,model:$model,
       http_status:$http_status,curl_exit:$curl_exit,elapsed_ms:$elapsed_ms,request_ms:$request_ms,
       audio_seconds:$audio_seconds,audio_bytes:$audio_bytes,
-      api_code:$api_code,error:$error}' >> "$LOGFILE"
+      api_code:$api_code,error:$error,
+      request_timing:{
+        dns_ms:($t[0] | milliseconds),
+        tcp_connect_ms:interval(($t[1] | reached); $t[0]),
+        tls_ms:interval(($t[2] | reached); ($t[1] | reached)),
+        transfer_setup_ms:interval(($t[3] | reached); ($t[2] | reached)),
+        upload_ms:interval(($t[4] | reached); ($t[3] | reached)),
+        upstream_wait_ms:interval(($t[5] | reached); ($t[4] | reached)),
+        download_ms:interval($t[6]; ($t[5] | reached)),
+        upload_complete_ms:($t[4] | reached | milliseconds),
+        first_byte_ms:($t[5] | reached | milliseconds),
+        total_ms:($t[6] | milliseconds)
+      }}' >> "$LOGFILE"
   [ "$outcome" = success ] || return 1
   printf '%s\n' "$transcription"
 )
@@ -525,7 +551,13 @@ pad_to_min_latency() {
 
 # ms since the previous mark; appends "name=Nms" to TIMING
 TIMING=""; T_LAST=$T0
-mark() { local now=$(date +%s%N); TIMING+="$1=$(( (now - T_LAST) / 1000000 ))ms "; T_LAST=$now; }
+mark() {
+  local now
+  if [ -n "${EPOCHREALTIME:-}" ]; then now=${EPOCHREALTIME/./}000
+  else now=$(date +%s%N); fi
+  TIMING+="$1=$(( (now - T_LAST) / 1000000 ))ms "
+  T_LAST=$now
+}
 
 REC_PID_FILE="$RUNTIME_DIR/xhisper-rec.pid"
 
@@ -543,6 +575,7 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
   TRANSCRIPT_FILE=$(mktemp "$RUNTIME_DIR/xhisper-transcript.XXXXXX")
   transcribe "$RECORDING" > "$TRANSCRIPT_FILE" &
   TRANSCRIBE_PID=$!
+  mark transcribe-start
 
   if is_silent "$RECORDING"; then
     kill "$TRANSCRIBE_PID" 2>/dev/null
@@ -550,8 +583,13 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
     rm -f "$RECORDING" "$TRANSCRIPT_FILE"
     exit 0
   fi
-  if [ "$insert_mode" = "paste" ]; then focus_query; clip_save; fi
-  mark silence+focus+clipboard-save
+  mark silence
+  if [ "$insert_mode" = "paste" ]; then
+    focus_query
+    mark focus
+    clip_save
+    mark clipboard-save
+  fi
 
   wait "$TRANSCRIBE_PID"
   TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
