@@ -174,8 +174,11 @@ or clipboard access). `make perf` is the separate offline application gate;
   ASSEMBLYAI_API_KEY=your-key   # https://www.assemblyai.com/dashboard/api-keys
   ```
 
-  A 1Password reference (`op://...`) works too, but is read on every dictation; if
-  1Password is locked or waiting for approval, that dictation falls back to Groq.
+  A 1Password reference (`op://...`) works too and needs `keyctl` (`keyutils`). It's
+  requested once, then kept in the kernel keyring: in memory, never on disk, until
+  reboot, and readable by programs running as you. While the first request is
+  unanswered, dictations fall back to Groq; if it gets no key, xhisper won't ask
+  again for 10 minutes. `keyctl purge user xhisper:assemblyai` forgets the key.
 
 ### Vocabulary
 

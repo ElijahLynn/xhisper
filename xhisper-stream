@@ -11,7 +11,8 @@ file is written.
 Standard library only (a small WebSocket client is built in).
 
 Environment:
-  ASSEMBLYAI_API_KEY      API key; an op:// 1Password reference is resolved with `op read`
+  ASSEMBLYAI_API_KEY      API key, or an op:// 1Password reference, which is read once and
+                          then kept in the kernel keyring in memory until reboot
                           (XHISPER_ASSEMBLYAI_API_KEY and YTKB_ASSEMBLYAI_API_KEY also work)
   XHISPER_KEYTERMS        JSON list of words to recognize (max 100), from xhisper's vocabulary
   XHISPER_STREAM_URL      override the endpoint (tests)
@@ -20,6 +21,7 @@ Environment:
 
 import argparse
 import base64
+import fcntl
 import json
 import os
 import shlex
@@ -28,6 +30,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -141,21 +144,95 @@ class WebSocket:
 
 
 # --- Session -----------------------------------------------------------------------
-LOOKUPS = []  # running `op read` processes, killed if we give up on them
+# 1Password is asked at most once: the key is then kept in the kernel keyring (in
+# memory, never on disk, gone at reboot), so dictations don't each need approval.
+KEY_NAME = os.environ.get("XHISPER_KEYRING_NAME", "xhisper:assemblyai")
+ASK_AGAIN_AFTER = 600   # s before asking 1Password again after a lookup that got no key
+LOOKUP_TIMEOUT = 120    # s to wait for approval in 1Password
+key_from_keyring = False
+
+
+def keyctl(*args, payload=None):
+    return subprocess.run(["keyctl", *args], input=payload, capture_output=True, text=True, timeout=5)
+
+
+def keyring_read():
+    found = keyctl("search", "@u", "user", KEY_NAME)
+    if found.returncode:
+        return None
+    value = keyctl("pipe", found.stdout.strip())
+    return value.stdout.strip() if value.returncode == 0 else None
+
+
+def keyring_forget():
+    found = keyctl("search", "@u", "user", KEY_NAME)
+    if found.returncode == 0:
+        keyctl("unlink", found.stdout.strip(), "@u")
+
+
+def lookup_lock_path():
+    return os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(),
+                        f"xhisper-key-lookup-{os.getuid()}")
+
+
+def fill_keyring():
+    """Detached helper (--fill-key): ask 1Password once and store the key. Outlives the
+    dictation that started it, so approving after you stop talking still counts."""
+    set_process_name("xhisper-keyfill")
+    os.umask(0o077)
+    fd = os.open(lookup_lock_path(), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return 0  # another lookup is already waiting for approval
+    if time.time() - os.fstat(fd).st_mtime < ASK_AGAIN_AFTER and os.fstat(fd).st_size:
+        return 0  # asked recently and got nothing: don't nag
+    os.ftruncate(fd, 0); os.write(fd, b"asked\n")
+    env = {k: v for k, v in os.environ.items() if k != "OP_SERVICE_ACCOUNT_TOKEN"}
+    try:
+        r = subprocess.run(["op", "read", os.environ["XHISPER_KEY_REF"]], capture_output=True,
+                           text=True, timeout=LOOKUP_TIMEOUT, env=env)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"1Password lookup failed: {type(e).__name__}")
+        return 1
+    value = r.stdout.strip()
+    if not value:
+        log(f"1Password lookup failed: {r.stderr.strip()[:200]}")
+        return 1
+    added = keyctl("padd", "user", KEY_NAME, "@u", payload=value)
+    if added.returncode == 0:
+        # User-readable: the hotkey starts each dictation in a new session.
+        keyctl("setperm", added.stdout.strip(), "0x3f3f0000")
+        os.ftruncate(fd, 0)  # success: a later lookup (key rejected) may ask right away
+    return added.returncode
+
+
+def key_from_1password(reference):
+    global key_from_keyring
+    try:
+        value = keyring_read()
+        if not value:
+            subprocess.Popen([sys.executable, os.path.abspath(__file__), "--fill-key"],
+                             env={**os.environ, "XHISPER_KEY_REF": reference},
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, start_new_session=True)
+            deadline = time.monotonic() + LOOKUP_TIMEOUT
+            while not value and time.monotonic() < deadline:
+                time.sleep(0.1)
+                value = keyring_read()
+    except FileNotFoundError:
+        raise RuntimeError("a 1Password key needs keyctl (keyutils) so it isn't requested on "
+                           "every dictation; install keyutils or set a plain key") from None
+    if not value:
+        raise RuntimeError("no key from 1Password yet")
+    key_from_keyring = True
+    return value
 
 
 def api_key():
     for name in ("ASSEMBLYAI_API_KEY", "XHISPER_ASSEMBLYAI_API_KEY", "YTKB_ASSEMBLYAI_API_KEY"):
         val = os.environ.get(name, "").strip()
         if val.startswith("op://"):
-            env = {k: v for k, v in os.environ.items() if k != "OP_SERVICE_ACCOUNT_TOKEN"}
-            proc = subprocess.Popen(["op", "read", val], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    text=True, env=env)
-            LOOKUPS.append(proc)
-            out, err = proc.communicate(timeout=20)
-            val = out.strip()
-            if not val:
-                raise RuntimeError(f"could not read {name} from 1Password: {err.strip()[:200]}")
+            return key_from_1password(val)
         if val:
             return val
     raise RuntimeError("no AssemblyAI key: set ASSEMBLYAI_API_KEY (env or ~/.env)")
@@ -211,6 +288,9 @@ class Session:
             ws = WebSocket(f"{url}?{urllib.parse.urlencode(params)}", {"Authorization": api_key()})
             first = json.loads(ws.recv() or "{}")
             if first.get("type") != "Begin":
+                message = str(first)
+                if key_from_keyring and "Unauthorized" in message and "concurrent" not in message:
+                    keyring_forget()  # stale key: the next lookup gets a fresh one
                 raise ConnectionError(f"session not started: {first}")
             self.ws = ws
         except Exception as e:  # noqa: BLE001 - any failure means "fall back to Groq"
@@ -332,6 +412,8 @@ def set_process_name(name):
 
 
 def main():
+    if sys.argv[1:] == ["--fill-key"]:
+        sys.exit(fill_keyring())
     set_process_name("xhisper-stream")
     os.umask(0o077)  # the recording and transcript are private
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -344,11 +426,7 @@ def main():
             os.remove(path)
         except FileNotFoundError:
             pass
-    code = Session(args).run()
-    for proc in LOOKUPS:  # an unanswered 1Password prompt shouldn't outlive us
-        if proc.poll() is None:
-            proc.kill()
-    sys.exit(code)
+    sys.exit(Session(args).run())
 
 
 if __name__ == "__main__":

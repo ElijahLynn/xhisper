@@ -68,11 +68,42 @@ kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null; SERVER=""
 read -r rc ms < <(dictate 0.5)
 check "no server: fails so xhisper falls back" "2" "$rc"
 
-# A key lookup that hangs (e.g. an unanswered 1Password prompt) must not delay stop.
-mkdir -p "$W/opbin"; printf '#!/bin/bash\nsleep 30\n' > "$W/opbin/op"; chmod +x "$W/opbin/op"
-start_server ok
-read -r rc ms < <(PATH="$W/opbin:$PATH" KEY="op://vault/item/field" dictate 0.5)
-check "hung key lookup: fails fast on stop" "2 yes" "$rc $([ "$ms" -lt 1000 ] && echo yes || echo "no: $ms ms")"
+# 1Password references: asked once, then the key comes from the kernel keyring.
+if command -v keyctl >/dev/null; then
+  export XDG_RUNTIME_DIR="$W/run"; mkdir -p "$W/run" "$W/opbin"
+  export XHISPER_KEYRING_NAME="xhisper:test:$$"
+  forget() { local id; id=$(keyctl search @u user "$XHISPER_KEYRING_NAME" 2>/dev/null) && keyctl unlink "$id" @u >/dev/null; rm -f "$W/run/"xhisper-key-lookup-*; : > "$W/op.count"; }
+  stub_op() { printf '#!/bin/bash\necho x >> "%s/op.count"\n%s\n' "$W" "$1" > "$W/opbin/op"; chmod +x "$W/opbin/op"; }
+  op_dictate() { PATH="$W/opbin:$PATH" KEY="op://vault/item/field" dictate "$1"; }
+
+  start_server ok
+  forget; stub_op 'echo test-key'
+  read -r rc ms < <(op_dictate 1); read -r rc2 ms < <(op_dictate 0.5)
+  check "1Password: two dictations work" "0 0" "$rc $rc2"
+  check "1Password: asked only once" "1" "$(wc -l < "$W/op.count")"
+
+  forget; stub_op 'echo wrong-key'
+  read -r rc ms < <(op_dictate 1)
+  check "1Password: rejected key fails" "2" "$rc"
+  check "1Password: rejected key leaves the keyring" "gone" \
+    "$(keyctl search @u user "$XHISPER_KEYRING_NAME" >/dev/null 2>&1 && echo kept || echo gone)"
+
+  forget; stub_op 'exit 1'
+  read -r rc ms < <(op_dictate 0.5); sleep 0.3; read -r rc2 ms < <(op_dictate 0.5); sleep 0.3
+  check "1Password: no key, falls back" "2 2" "$rc $rc2"
+  check "1Password: not asked again right away" "1" "$(wc -l < "$W/op.count")"
+
+  # An unanswered approval must not delay stop, and stays open for a late answer.
+  forget; stub_op 'sleep 1.5; echo test-key'
+  read -r rc ms < <(op_dictate 0.5)
+  check "1Password: unanswered, stop fails fast" "2 yes" "$rc $([ "$ms" -lt 1000 ] && echo yes || echo "no: $ms ms")"
+  sleep 1.5
+  read -r rc ms < <(op_dictate 0.5)
+  check "1Password: late approval works next time" "0 1" "$rc $(wc -l < "$W/op.count")"
+  forget; unset XDG_RUNTIME_DIR XHISPER_KEYRING_NAME
+else
+  echo "skip 1Password tests: needs keyctl"
+fi
 
 # --- xhisper.sh end to end, backend: assemblyai -----------------------------------
 # Start and stop a dictation through the real script, on a private X display (so the
