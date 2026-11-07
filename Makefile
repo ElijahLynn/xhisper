@@ -17,11 +17,12 @@ xhisperclip: xhisperclip.c
 test: test.c
 	$(CC) $(CFLAGS) test.c -o test
 
-install: xhispertool xhisperclip xhisper.sh
+install: xhispertool xhisperclip xhisper.sh xhisper-vocab
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 xhispertool $(DESTDIR)$(BINDIR)/xhispertool
 	ln -sf xhispertool $(DESTDIR)$(BINDIR)/xhispertoold
 	install -m 755 xhisperclip $(DESTDIR)$(BINDIR)/xhisperclip
+	install -m 755 xhisper-vocab $(DESTDIR)$(BINDIR)/xhisper-vocab
 	install -m 755 xhisper.sh $(DESTDIR)$(BINDIR)/xhisper
 
 uninstall:
@@ -29,6 +30,7 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/xhispertool
 	rm -f $(DESTDIR)$(BINDIR)/xhispertoold
 	rm -f $(DESTDIR)$(BINDIR)/xhisperclip
+	rm -f $(DESTDIR)$(BINDIR)/xhisper-vocab
 
 clean:
 	rm -f xhispertool xhispertoold xhisperclip test
@@ -51,7 +53,10 @@ check:
 	python3 tests/clipboard.py
 	python3 tests/calibration-stats.py
 
+test-vocab:
+	bash tests/vocab.sh
+
 hooks:
 	git config core.hooksPath .githooks
 
-.PHONY: all install uninstall clean perf perf-live test-wayland check hooks
+.PHONY: all install uninstall clean perf perf-live test-wayland check test-vocab hooks

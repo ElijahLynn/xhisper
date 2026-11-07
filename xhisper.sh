@@ -5,12 +5,17 @@
 #
 # Settings: ~/.config/xhisper/xhisperrc (see default_xhisperrc and README.md):
 #   insert-mode, paste-key, indicator-color, indicator-style, min-latency, transcription-prompt,
-#   long-recording-threshold, silence-threshold, type-key-gap,
+#   auto-vocab, trailing-space, long-recording-threshold, silence-threshold, type-key-gap,
 #   non-ascii-initial-delay, non-ascii-default-delay
+#
+# Vocabulary (spelling hints sent to Whisper, see README.md "Vocabulary"):
+#   ~/.config/xhisper/words         terms you taught with --learn (one per line)
+#   ~/.config/xhisper/replacements  "heard<TAB>word" fixes learned with --learn
+#   ~/.cache/xhisper/vocab          built from what you type by xhisper-vocab
 #
 # Requires: pipewire (pw-record), curl, jq, ffmpeg, wl-clipboard, xclip, gdbus,
 # notify-send; xhispertool/xhispertoold (make && sudo make install); optionally the
-# xhisper-indicator GNOME Shell extension in extension/.
+# xhisper-indicator GNOME Shell extension in extension/, and python3 for xhisper-vocab.
 
 T0=$(date +%s%N)  # per-step timing, logged after each dictation
 [ -f "$HOME/.env" ] && source "$HOME/.env"
@@ -18,6 +23,7 @@ T0=$(date +%s%N)  # per-step timing, logged after each dictation
 # Parse command-line arguments
 LOCAL_MODE=0
 WRAP_KEY=""
+LEARN=0; LEARN_WORD=""
 # Where recordings, logs and PID files live. Overridable so tests run isolated.
 RUNTIME_DIR="${XHISPER_RUNTIME_DIR:-/tmp}"
 for arg in "$@"; do
@@ -33,6 +39,9 @@ for arg in "$@"; do
       fi
       exit 0
       ;;
+    --learn)
+      LEARN=1
+      ;;
     --leftalt|--rightalt|--leftctrl|--rightctrl|--leftshift|--rightshift|--super)
       if [ -n "$WRAP_KEY" ]; then
         echo "Error: Multiple wrap keys not yet supported" >&2
@@ -41,8 +50,12 @@ for arg in "$@"; do
       WRAP_KEY="${arg#--}"
       ;;
     *)
+      if [ "$LEARN" -eq 1 ] && [ -z "$LEARN_WORD" ] && [[ "$arg" != -* ]]; then
+        LEARN_WORD="$arg"  # xhisper --learn WORD (default: the selected text)
+        continue
+      fi
       echo "Error: Unknown option '$arg'" >&2
-      echo "Usage: xhisper [--local] [--log] [--leftalt|--rightalt|--leftctrl|--rightctrl|--leftshift|--rightshift|--super]" >&2
+      echo "Usage: xhisper [--local] [--log] [--learn [WORD]] [--leftalt|--rightalt|--leftctrl|--rightctrl|--leftshift|--rightshift|--super]" >&2
       exit 1
       ;;
   esac
@@ -54,10 +67,12 @@ if [ "$LOCAL_MODE" -eq 1 ]; then
   XHISPERTOOL="$SCRIPT_DIR/xhispertool"
   XHISPERTOOLD="$SCRIPT_DIR/xhispertoold"
   XHISPERCLIP="$SCRIPT_DIR/xhisperclip"
+  XHISPER_VOCAB="$SCRIPT_DIR/xhisper-vocab"
 else
   XHISPERTOOL="${XHISPERTOOL:-xhispertool}"     # env overrides are for tests
   XHISPERTOOLD="${XHISPERTOOLD:-xhispertoold}"
   XHISPERCLIP="${XHISPERCLIP:-xhisperclip}"
+  XHISPER_VOCAB="${XHISPER_VOCAB:-xhisper-vocab}"
 fi
 
 RECORDING="$RUNTIME_DIR/xhisper.wav"
@@ -81,6 +96,10 @@ indicator_style=meter
 # Text never appears sooner than this many ms after the stop key press, so every
 # app (Wayland clipboard or xclip path) feels the same. 0 disables the floor.
 min_latency=450
+# Add words you type often to the Whisper prompt automatically (xhisper-vocab).
+auto_vocab=on
+# Paste a space after each dictation so back-to-back dictations don't run together.
+trailing_space=on
 
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/xhisper/xhisperrc"
 
@@ -108,6 +127,8 @@ if [ -f "$CONFIG_FILE" ]; then
       indicator-color) indicator_color="$value" ;;
       indicator-style) indicator_style="$value" ;;
       min-latency) min_latency="$value" ;;
+      auto-vocab) auto_vocab="$value" ;;
+      trailing-space) trailing_space="$value" ;;
     esac
   done < "$CONFIG_FILE"
 fi
@@ -431,6 +452,85 @@ is_silent() {
   return 1
 }
 
+# --- Vocabulary -------------------------------------------------------------------
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/xhisper"
+WORDS_FILE="$CONFIG_DIR/words"                 # taught with --learn
+REPLACEMENTS_FILE="$CONFIG_DIR/replacements"   # "heard<TAB>word", learned with --learn
+VOCAB_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/xhisper/vocab"  # built by xhisper-vocab
+LEARN_FILE="$RUNTIME_DIR/xhisper-learn"        # the word being taught, while recording
+PROMPT_BUDGET=400  # chars (~100 tokens); long prompts make Whisper echo them back
+
+# The Whisper prompt: transcription-prompt, then taught words, then the automatic
+# vocabulary, without duplicates, cut to PROMPT_BUDGET. Pure bash (no processes).
+build_prompt() {
+  local prompt="$transcription_prompt" term low
+  local -A seen=()
+  local IFS=$'\n'
+  if [ -n "$prompt" ]; then
+    local t; IFS=',' read -ra t <<< "$prompt"
+    for term in "${t[@]}"; do term="${term#"${term%%[![:space:]]*}"}"; seen[${term,,}]=1; done
+    IFS=$'\n'
+  fi
+  local files=("$WORDS_FILE"); [ "$auto_vocab" = on ] && files+=("$VOCAB_FILE")
+  local f terms i
+  for f in "${files[@]}"; do
+    [ -f "$f" ] || continue
+    mapfile -t terms < "$f"
+    # Taught words newest first, so the budget never drops what you just taught.
+    if [ "$f" = "$WORDS_FILE" ]; then
+      local rev=(); for (( i = ${#terms[@]} - 1; i >= 0; i-- )); do rev+=("${terms[i]}"); done
+      terms=("${rev[@]}")
+    fi
+    for term in "${terms[@]}"; do
+      [ -n "$term" ] || continue
+      low="${term,,}"; [ -n "${seen[$low]-}" ] && continue
+      [ $(( ${#prompt} + ${#term} + 2 )) -gt "$PROMPT_BUDGET" ] && break 2
+      seen[$low]=1; prompt="${prompt:+$prompt, }$term"
+    done
+  done
+  printf '%s' "$prompt"
+}
+
+# Fix what Whisper keeps mishearing: whole-word, case-insensitive "heard" -> "word"
+# from REPLACEMENTS_FILE (only non-dictionary mishearings are ever saved there).
+apply_replacements() {
+  local text="$1" heard word pre post n
+  [ -s "$REPLACEMENTS_FILE" ] || { printf '%s' "$text"; return; }
+  shopt -s nocasematch
+  while IFS=$'\t' read -r heard word; do
+    [ -n "$heard" ] && [ -n "$word" ] || continue
+    local re="(^|[^[:alnum:]])(${heard})([^[:alnum:]]|$)"
+    for (( n = 0; n < 20; n++ )); do
+      [[ "$text" =~ $re ]] || break
+      pre="${text%%"${BASH_REMATCH[0]}"*}"
+      post="${text#*"${BASH_REMATCH[0]}"}"
+      text="$pre${BASH_REMATCH[1]}$word${BASH_REMATCH[3]}$post"
+    done
+  done < "$REPLACEMENTS_FILE"
+  shopt -u nocasematch
+  printf '%s' "$text"
+}
+
+# Rebuild the automatic vocabulary in the background once a day (after a dictation,
+# so it never delays one).
+refresh_vocab() {
+  [ "$auto_vocab" = on ] && command -v "$XHISPER_VOCAB" >/dev/null 2>&1 || return 0
+  local stamp="$VOCAB_FILE.stamp"
+  [ -f "$stamp" ] && [ -n "$(find "$stamp" -mmin -1440 2>/dev/null)" ] && return 0
+  mkdir -p "${VOCAB_FILE%/*}" && touch "$stamp"
+  ( nice -n 10 "$XHISPER_VOCAB" >/dev/null 2>>"$LOGFILE" & ) 2>/dev/null
+}
+
+# A dictionary word? Learned fixes are only safe for mishearings that aren't real
+# words ("Weiland" -> "Wayland" yes, "clock" -> "Claude" never).
+is_dictionary_word() {
+  local d
+  for d in /usr/share/dict/words /usr/share/dict/american-english /usr/share/dict/cracklib-small; do
+    [ -f "$d" ] && grep -qixF -- "$1" "$d" && return 0
+  done
+  return 1
+}
+
 transcribe() (
   # Isolate cleanup from the caller's clipboard trap. Response bodies are temporary,
   # private, and never logged; only bounded diagnostic fields survive.
@@ -450,6 +550,7 @@ transcribe() (
   # Use large model for longer recordings, turbo for short ones
   local is_long_recording=$(echo "$duration > $long_recording_threshold" | bc -l)
   local model=$([[ $is_long_recording -eq 1 ]] && echo "whisper-large-v3" || echo "whisper-large-v3-turbo")
+  local PROMPT; PROMPT=$(build_prompt)
 
   local http_status curl_exit transcription="" outcome api_code="" error=""
   local curl_output curl_times=""
@@ -460,7 +561,7 @@ transcribe() (
     --header "Content-Type: multipart/form-data" \
     --form "file=@$recording" \
     --form "model=$model" \
-    --form "prompt=$transcription_prompt" \
+    --form-string "prompt=$PROMPT" \
     --output "$request_dir/response" \
     --write-out '%{http_code}\n%{time_namelookup}\t%{time_connect}\t%{time_appconnect}\t%{time_pretransfer}\t%{time_posttransfer}\t%{time_starttransfer}\t%{time_total}' \
     2>"$request_dir/error")
@@ -482,8 +583,11 @@ transcribe() (
     outcome=invalid_response
   else
     transcription=$(jq -r '.text // "" | sub("^ "; "")' "$request_dir/response")
+    local spoken="${transcription,,}"; spoken="${spoken%.}"
     if [[ -z "${transcription//[[:space:]]/}" ]]; then
       outcome=empty_transcription
+    elif [ ${#spoken} -gt 20 ] && [[ "${PROMPT,,}" == *"$spoken"* ]]; then
+      outcome=prompt_echo  # on near-silent audio Whisper sometimes returns its prompt
     else
       outcome=success
     fi
@@ -532,8 +636,41 @@ transcribe() (
         total_ms:($t[6] | milliseconds)
       }}' >> "$LOGFILE"
   [ "$outcome" = success ] || return 1
-  printf '%s\n' "$transcription"
+  printf '%s\n' "$(apply_replacements "$transcription")"
 )
+
+# The selected text (PRIMARY selection): what --learn teaches when no WORD is given.
+selected_text() {
+  { [ -n "$WAYLAND_DISPLAY" ] && timeout 0.3 wl-paste --primary --no-newline 2>/dev/null; } ||
+    timeout 0.3 xclip -o -selection primary 2>/dev/null
+}
+
+# Second press of a --learn dictation: compare what Whisper heard with the word.
+# The word is already in WORDS_FILE (so it's in the prompt); if Whisper still heard
+# something else that isn't a dictionary word, save "heard -> word" as a fix.
+finish_learn() {
+  local word heard heard_clean msg
+  word=$(cat "$LEARN_FILE"); rm -f "$LEARN_FILE"
+  heard="$1"
+  heard_clean="${heard%"${heard##*[![:space:].,!?;:]}"}"   # drop trailing punctuation
+  heard_clean="${heard_clean#"${heard_clean%%[![:space:]]*}"}"
+  if [ -z "$heard_clean" ] || [ "${heard_clean,,}" = "${word,,}" ]; then
+    msg="Learned \"$word\""
+  elif [[ "$heard_clean" =~ ^[[:alnum:]\ \'-]{2,40}$ ]] && [ "$(wc -w <<< "$heard_clean")" -le 4 ]; then
+    local w common=0
+    for w in $heard_clean; do is_dictionary_word "$w" && common=1; done
+    if [ "$common" -eq 0 ] && ! grep -qiF -- "$heard_clean"$'\t' "$REPLACEMENTS_FILE" 2>/dev/null; then
+      printf '%s\t%s\n' "$heard_clean" "$word" >> "$REPLACEMENTS_FILE"
+      msg="Learned \"$word\" (will fix \"$heard_clean\")"
+    else
+      msg="Learned \"$word\" (heard \"$heard_clean\": real words, so no auto-fix)"
+    fi
+  else
+    msg="Learned \"$word\" (heard \"$heard_clean\")"
+  fi
+  echo "=== learn: taught a word ===" >> "$LOGFILE"  # no transcript text in the log
+  notify "$msg" 4000
+}
 
 # Main
 
@@ -584,7 +721,8 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
     exit 0
   fi
   mark silence
-  if [ "$insert_mode" = "paste" ]; then
+  LEARNING=0; [ -s "$LEARN_FILE" ] && LEARNING=1
+  if [ "$insert_mode" = "paste" ] && [ "$LEARNING" -eq 0 ]; then
     focus_query
     mark focus
     clip_save
@@ -596,9 +734,16 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
   mark transcribe-wait
   if [ -z "$TRANSCRIPTION" ] || [ "$TRANSCRIPTION" = "null" ]; then
     notify "Transcription failed (see xhisper --log)" 4000
-    rm -f "$RECORDING"
+    rm -f "$RECORDING" "$LEARN_FILE"
     exit 1
   fi
+  if [ "$LEARNING" -eq 1 ]; then  # teaching a word: nothing is pasted
+    finish_learn "$TRANSCRIPTION"
+    rm -f "$RECORDING"
+    exit 0
+  fi
+  # A space after each dictation, so the next one doesn't run into it.
+  [ "$trailing_space" = on ] && [[ "$TRANSCRIPTION" != *[[:space:]] ]] && TRANSCRIPTION+=" "
 
   if [ "$insert_mode" = "paste" ] && clip_stage "$TRANSCRIPTION"; then
     mark clipboard
@@ -613,8 +758,24 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
   echo "Timing: ${TIMING}total=$(( ($(date +%s%N) - T0) / 1000000 ))ms (${#TRANSCRIPTION} chars)" >> "$LOGFILE"
 
   rm -f "$RECORDING"
+  refresh_vocab
 else
   # No recording running, so start
+  rm -f "$LEARN_FILE"
+  if [ "$LEARN" -eq 1 ]; then
+    # Teach a word: take it from the argument or the selection, add it to the
+    # vocabulary now, then record you saying it (stop with either hotkey).
+    word="${LEARN_WORD:-$(selected_text)}"
+    word="${word#"${word%%[![:space:]]*}"}"; word="${word%"${word##*[![:space:]]}"}"
+    if [ -z "$word" ] || [ ${#word} -gt 40 ] || [[ "$word" == *$'\n'* ]]; then
+      notify "Select a word (or short name) to teach, then press the learn key" 4000
+      exit 1
+    fi
+    mkdir -p "$CONFIG_DIR"
+    grep -qixF -- "$word" "$WORDS_FILE" 2>/dev/null || echo "$word" >> "$WORDS_FILE"
+    printf '%s' "$word" > "$LEARN_FILE"
+    notify "Say \"$word\", then press the key again" 3000
+  fi
   indicator_show
   pw-record --channels=1 --rate=16000 "$RECORDING" &
   echo $! > "$REC_PID_FILE"

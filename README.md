@@ -28,6 +28,10 @@ sudo apt install pipewire-bin jq curl ffmpeg gcc wl-clipboard xclip libnotify-bi
 sudo dnf install pipewire-utils jq curl ffmpeg gcc wl-clipboard xclip libnotify
 ```
 
+The automatic vocabulary also needs `python3` and a word list in `/usr/share/dict`
+(`words` on Arch, `wamerican` on Debian/Ubuntu, `words` on Fedora); without them it
+is skipped.
+
 `xclip` is needed even on Wayland: the Wayland clipboard tools fail while an X11
 (XWayland) app such as Warp has focus, and xhisper falls back to X11 then. Building
 the `xhisperclip` helper needs the libX11 headers (`libx11-dev` on Debian/Ubuntu,
@@ -100,6 +104,10 @@ Other setups:
 | Hyprland | `bind = $mainMod, D, exec, xhisper` |
 | sxhkd | `super + d` → `xhisper` |
 
+Optionally bind a second key to `xhisper --learn` for teaching words (see
+[Vocabulary](#vocabulary)). The GNOME commands above work with `name=xhisper-learn`,
+a binding such as `binding='<Super><Shift>d'` and `action='/usr/local/bin/xhisper --learn'`.
+
 ## Use
 
 1. Press your key: recording starts and the red meter appears.
@@ -109,6 +117,9 @@ Other setups:
 Silent recordings are ignored with a "No sound detected" notification. Failed
 transcriptions show "Transcription failed".
 
+Each dictation ends with a space, so the next one doesn't run into it
+(`trailing-space : off` to disable).
+
 ```sh
 xhisper --log   # show diagnostics, per-step timing, and warnings
 ```
@@ -116,7 +127,7 @@ xhisper --log   # show diagnostics, per-step timing, and warnings
 Each transcription attempt writes a JSON diagnostic record with a UTC start time,
 attempt ID, outcome, model, audio duration/size, elapsed and request time, curl
 exit code, HTTP status, and bounded API/transport error details. Outcomes distinguish transport
-errors, API errors, invalid responses, empty transcriptions, and success. New
+errors, API errors, invalid responses, empty transcriptions, prompt echoes, and success. New
 records contain no transcript text, audio, or authorization header. API error
 messages are limited to 512 characters and the configured API key is redacted.
 Temporary response files are private and removed when the attempt exits.
@@ -148,6 +159,31 @@ Run `make check` for isolated diagnostic regression tests (no API key, network,
 or clipboard access). `make perf` is the separate offline application gate;
 `make perf-live` explicitly benchmarks live Groq requests.
 
+### Vocabulary
+
+Whisper gets a list of words to spell right with every dictation, built from three
+places:
+
+1. **`transcription-prompt`** in your config: words you always want.
+2. **Words you teach.** Select a word anywhere (say "XWayland" on a web page), press
+   your `xhisper --learn` key, say the word, and press the key again. The word goes
+   into the list right away. If Whisper still hears something else that isn't a
+   dictionary word ("xWeiland"), xhisper remembers that and fixes it in every later
+   dictation. Mishearings that are real words ("clock" for "Claude") are never
+   auto-fixed, since that would break real sentences. `xhisper --learn WORD` does the
+   same without a selection.
+3. **Words you type** (`auto-vocab : on`). `xhisper-vocab` reads your messages in
+   Claude Code transcripts from the last 60 days and the folder names in
+   `~/projects`, and keeps unusual words you used in at least two messages (names
+   like Supabase, Hetzner, ytkb), skipping everyday words, typos, code and IDs. It
+   rebuilds in the background at most once a day; run `xhisper-vocab --print` to
+   rebuild now and see the list.
+
+Files: `~/.config/xhisper/words` (taught words), `~/.config/xhisper/replacements`
+(learned fixes, `heard<TAB>word`), `~/.cache/xhisper/vocab` (automatic list). Edit or
+delete lines freely. The combined list is cut to about 400 characters, taught words
+first: a long prompt can make Whisper echo it back, and xhisper drops such echoes.
+
 **Non-QWERTY layouts:** set up a key that switches your input to QWERTY, then bind
 `xhisper --rightalt` (or `--leftalt`, `--leftctrl`, `--rightctrl`, `--leftshift`,
 `--rightshift`, `--super`) instead of plain `xhisper`. It presses that key before
@@ -168,7 +204,9 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
 | `min-latency` | `450` | Text never appears sooner than this many ms after the stop key press, so every app feels the same. `0` disables it |
 | `indicator-color` | `red` | `red`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `white` |
 | `indicator-style` | `meter` | `meter` (animated level bars) or `orb` (pulsing orb) |
-| `transcription-prompt` | *(empty)* | Optional context words for Whisper. Short is best: a long prompt can be echoed back instead of transcribed |
+| `transcription-prompt` | *(empty)* | Words to always spell right, comma-separated. See [Vocabulary](#vocabulary) |
+| `auto-vocab` | `on` | Also hint unusual words you type often (`xhisper-vocab`) |
+| `trailing-space` | `on` | Paste a space after each dictation |
 | `long-recording-threshold` | `1000` | Recordings longer than this many seconds use `whisper-large-v3` instead of turbo |
 | `silence-threshold` | `-50` | Peak volume in dB below which a recording counts as silent |
 | `type-key-gap` | `2000` | `type` mode: microseconds between keys. Raise it if an app drops keys |

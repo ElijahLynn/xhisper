@@ -353,6 +353,7 @@ exit "$rc"
                                 XDG_CACHE_HOME=str(root / "cache"),
                                 XHISPERTOOL=str(root / "bin/xhispertool"),
                                 XHISPERCLIP=str(root / "bin/xhisperclip"),
+                                XHISPER_VOCAB="true",
                                 KEY_FILE=str(runtime / "keys"), ROUTE_FILE=str(runtime / "routes"),
                                 MOCK_FOCUS=f"('calibration', 'calibration', '{path}')",
                             )
@@ -402,7 +403,9 @@ exit "$rc"
                                 state = json.loads((editor_root / "state").read_text())
                                 delivered = (state["id"] == sample_id and
                                              (bool(state["text"]) if args.live
-                                              else state["text"] == TRANSCRIPT))
+                                              # current code adds trailing-space (default on)
+                                              else state["text"] == (TRANSCRIPT + " " if version == "current"
+                                                                     else TRANSCRIPT)))
                                 valid &= delivered
                             sample = {
                                 "round": round_number + 1, "pair": pair,

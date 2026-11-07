@@ -14,7 +14,7 @@ FUNCTIONS = SOURCE[SOURCE.index("get_duration() {"):SOURCE.index("# Main\n")]
 
 
 class TranscriptionTests(unittest.TestCase):
-    def run_case(self, body, status="200", exit_code=0, error="", rotate=False, timings=""):
+    def run_case(self, body, status="200", exit_code=0, error="", rotate=False, timings="", prompt=""):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             curl = root / "curl"
@@ -38,14 +38,14 @@ exit "$MOCK_EXIT"
             environment = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}",
                                MOCK_BODY=body, MOCK_STATUS=status,
                                MOCK_EXIT=str(exit_code), MOCK_ERROR=error,
-                               MOCK_TIMINGS=timings)
+                               MOCK_TIMINGS=timings, MOCK_PROMPT=prompt)
             result = subprocess.run(
                 ["bash", "-c", FUNCTIONS + """
 RUNTIME_DIR=$1
 LOGFILE=$1/xhisper.log
 GROQ_API_KEY=TEST_SECRET
 long_recording_threshold=1000
-transcription_prompt=
+transcription_prompt=$MOCK_PROMPT
 transcribe "$1/audio.wav"
 """, "test", directory],
                 env=environment, capture_output=True, text=True,
@@ -71,6 +71,13 @@ transcribe "$1/audio.wav"
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "private speech\n")
         self.assertEqual(record["outcome"], "success")
+
+    def test_prompt_echo_is_not_a_transcription(self):
+        result, record = self.run_case('{"text":" Claude, Warp, Strata, GitHub."}',
+                                       prompt="Claude, Warp, Strata, GitHub, Groq")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(record["outcome"], "prompt_echo")
 
     def test_transport_error(self):
         result, record = self.run_case("", "000", 6, "Could not resolve host")

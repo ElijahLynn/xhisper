@@ -18,7 +18,9 @@ indicator-color : red      # red, orange, yellow, green, blue, purple, pink, whi
 indicator-style : meter    # meter (level bars) or orb (pulsing orb)
 
 # Transcription
-transcription-prompt     : ""     # optional context words; keep it short
+transcription-prompt     : ""     # words you always want spelled right, comma-separated
+auto-vocab               : on     # also hint words you type often (xhisper-vocab)
+trailing-space           : on     # space after each dictation, so they don't run together
 long-recording-threshold : 1000   # seconds; longer recordings use whisper-large-v3
 
 # Peak volume (dB) below which a recording counts as silent and is ignored.
