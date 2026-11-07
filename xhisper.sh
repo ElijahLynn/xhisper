@@ -5,7 +5,8 @@
 #
 # Settings: ~/.config/xhisper/xhisperrc (see default_xhisperrc and README.md):
 #   insert-mode, paste-key, indicator-color, indicator-style, min-latency, transcription-prompt,
-#   auto-vocab, trailing-space, long-recording-threshold, silence-threshold, type-key-gap,
+#   auto-vocab, trailing-space, backend, assemblyai-model,
+#   long-recording-threshold, silence-threshold, type-key-gap,
 #   non-ascii-initial-delay, non-ascii-default-delay
 #
 # Vocabulary (spelling hints sent to Whisper, see README.md "Vocabulary"):
@@ -68,11 +69,13 @@ if [ "$LOCAL_MODE" -eq 1 ]; then
   XHISPERTOOLD="$SCRIPT_DIR/xhispertoold"
   XHISPERCLIP="$SCRIPT_DIR/xhisperclip"
   XHISPER_VOCAB="$SCRIPT_DIR/xhisper-vocab"
+  XHISPER_STREAM="$SCRIPT_DIR/xhisper-stream"
 else
   XHISPERTOOL="${XHISPERTOOL:-xhispertool}"     # env overrides are for tests
   XHISPERTOOLD="${XHISPERTOOLD:-xhispertoold}"
   XHISPERCLIP="${XHISPERCLIP:-xhisperclip}"
   XHISPER_VOCAB="${XHISPER_VOCAB:-xhisper-vocab}"
+  XHISPER_STREAM="${XHISPER_STREAM:-xhisper-stream}"
 fi
 
 RECORDING="$RUNTIME_DIR/xhisper.wav"
@@ -100,6 +103,10 @@ min_latency=450
 auto_vocab=on
 # Paste a space after each dictation so back-to-back dictations don't run together.
 trailing_space=on
+# Speech-to-text: "groq" (upload after you stop) or "assemblyai" (stream while you talk,
+# text ready ~50 ms after stop; falls back to Groq if streaming fails).
+backend=groq
+assemblyai_model=universal-3-5-pro
 
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/xhisper/xhisperrc"
 
@@ -129,6 +136,8 @@ if [ -f "$CONFIG_FILE" ]; then
       min-latency) min_latency="$value" ;;
       auto-vocab) auto_vocab="$value" ;;
       trailing-space) trailing_space="$value" ;;
+      backend) backend="$value" ;;
+      assemblyai-model) assemblyai_model="$value" ;;
     esac
   done < "$CONFIG_FILE"
 fi
@@ -141,7 +150,7 @@ pid_is() {  # pid name
   read -r state 2>/dev/null < "/proc/$1/stat"; state="${state##*) }"
   [ "${state%% *}" != Z ]  # an exited process waiting to be reaped doesn't count
 }
-read_pid() { local pid; read -r pid < "$1" 2>/dev/null && echo "$pid"; }
+read_pid() { local pid; { read -r pid < "$1"; } 2>/dev/null && echo "$pid"; }
 
 # Auto-start the key-sending daemon if it isn't running
 DAEMON_PID_FILE="$RUNTIME_DIR/xhispertoold.pid"
@@ -531,6 +540,24 @@ is_dictionary_word() {
   return 1
 }
 
+# Keep the current log and one previous generation, approximately 1 MiB each.
+prepare_log() {
+  if [ -f "$LOGFILE" ] && [ "$(stat --format=%s "$LOGFILE")" -ge 1048576 ]; then
+    mv --force -- "$LOGFILE" "$LOGFILE.1"
+    chmod 600 "$LOGFILE.1"
+  fi
+  touch "$LOGFILE"
+  chmod 600 "$LOGFILE"
+}
+
+# Diagnostic record for a streamed dictation; like transcribe's, it holds no transcript.
+log_stream_attempt() {
+  prepare_log
+  jq --null-input --compact-output --arg timestamp "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg outcome "$1" --arg model "$assemblyai_model" \
+    '{timestamp:$timestamp,backend:"assemblyai",outcome:$outcome,model:$model}' >> "$LOGFILE"
+}
+
 transcribe() (
   # Isolate cleanup from the caller's clipboard trap. Response bodies are temporary,
   # private, and never logged; only bounded diagnostic fields survive.
@@ -598,13 +625,7 @@ transcribe() (
     api_code="${api_code//"$GROQ_API_KEY"/[REDACTED]}"
   fi
   local elapsed_ms=$(( ($(date +%s%N) - logging_start) / 1000000 ))
-  # Keep the current log and one previous generation, approximately 1 MiB each.
-  if [ -f "$LOGFILE" ] && [ "$(stat --format=%s "$LOGFILE")" -ge 1048576 ]; then
-    mv --force -- "$LOGFILE" "$LOGFILE.1"
-    chmod 600 "$LOGFILE.1"
-  fi
-  touch "$LOGFILE"
-  chmod 600 "$LOGFILE"
+  prepare_log
   jq --null-input --compact-output \
     --arg timestamp "$timestamp" --arg attempt "$attempt" --arg outcome "$outcome" \
     --arg model "$model" --arg http_status "$http_status" \
@@ -697,41 +718,82 @@ mark() {
 }
 
 REC_PID_FILE="$RUNTIME_DIR/xhisper-rec.pid"
+STREAM_TEXT="$RUNTIME_DIR/xhisper-stream.txt"  # xhisper-stream's transcript
+
+# Words for AssemblyAI's keyterms_prompt (max 100): the same list as the Whisper prompt.
+keyterms_json() {
+  local IFS=$'\n'
+  build_prompt | sed 's/, /\n/g' | jq -Rsc 'split("\n") | map(select(length > 0 and length <= 50)) | .[:100]'
+}
 
 # A recording is running: stop it and transcribe
-if REC_PID=$(read_pid "$REC_PID_FILE") && pid_is "$REC_PID" pw-record; then
+if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_is "$REC_PID" xhisper-stream; }; then
   mark startup
-  kill "$REC_PID"
-  # pw-record finalizes the WAV header on exit; wait for that (up to 0.5 s).
-  for _ in {1..100}; do pid_is "$REC_PID" pw-record || break; sleep 0.005; done
-  rm -f "$REC_PID_FILE"
-  indicator_hide
-  mark stop
-
-  # Upload right away; check for silence and save the clipboard while it runs.
-  TRANSCRIPT_FILE=$(mktemp "$RUNTIME_DIR/xhisper-transcript.XXXXXX")
-  transcribe "$RECORDING" > "$TRANSCRIPT_FILE" &
-  TRANSCRIBE_PID=$!
-  mark transcribe-start
-
-  if is_silent "$RECORDING"; then
-    kill "$TRANSCRIBE_PID" 2>/dev/null
-    notify "No sound detected"
-    rm -f "$RECORDING" "$TRANSCRIPT_FILE"
-    exit 0
-  fi
-  mark silence
   LEARNING=0; [ -s "$LEARN_FILE" ] && LEARNING=1
-  if [ "$insert_mode" = "paste" ] && [ "$LEARNING" -eq 0 ]; then
-    focus_query
-    mark focus
-    clip_save
-    mark clipboard-save
+  CLIP_SAVED=0; TRANSCRIPTION=""; STREAMED=0
+  if pid_is "$REC_PID" xhisper-stream; then
+    # Streaming: AssemblyAI has been transcribing all along; ask for the last turn.
+    kill -USR1 "$REC_PID"
+    indicator_hide
+    mark stop
+    if [ "$insert_mode" = "paste" ] && [ "$LEARNING" -eq 0 ]; then
+      focus_query
+      mark focus
+      clip_save
+      mark clipboard-save
+      CLIP_SAVED=1
+    fi
+    for _ in {1..600}; do pid_is "$REC_PID" xhisper-stream || break; sleep 0.005; done  # up to 3 s
+    rm -f "$REC_PID_FILE"
+    if [ -f "$STREAM_TEXT" ]; then
+      STREAMED=1
+      TRANSCRIPTION=$(cat "$STREAM_TEXT"); rm -f "$STREAM_TEXT"
+      TRANSCRIPTION=$(apply_replacements "$TRANSCRIPTION")
+      mark stream-wait
+      log_stream_attempt "$([ -n "$TRANSCRIPTION" ] && echo success || echo empty_transcription)"
+      if [ -z "$TRANSCRIPTION" ]; then
+        notify "No speech detected"
+        rm -f "$RECORDING" "$LEARN_FILE"
+        exit 0
+      fi
+    else
+      log_stream_attempt stream_failed
+      mark stream-failed
+    fi
+  else
+    kill "$REC_PID"
+    # pw-record finalizes the WAV header on exit; wait for that (up to 0.5 s).
+    for _ in {1..100}; do pid_is "$REC_PID" pw-record || break; sleep 0.005; done
+    rm -f "$REC_PID_FILE"
+    indicator_hide
+    mark stop
   fi
 
-  wait "$TRANSCRIBE_PID"
-  TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
-  mark transcribe-wait
+  if [ "$STREAMED" -eq 0 ]; then
+    # Upload right away; check for silence and save the clipboard while it runs.
+    TRANSCRIPT_FILE=$(mktemp "$RUNTIME_DIR/xhisper-transcript.XXXXXX")
+    transcribe "$RECORDING" > "$TRANSCRIPT_FILE" &
+    TRANSCRIBE_PID=$!
+    mark transcribe-start
+
+    if is_silent "$RECORDING"; then
+      kill "$TRANSCRIBE_PID" 2>/dev/null
+      notify "No sound detected"
+      rm -f "$RECORDING" "$TRANSCRIPT_FILE" "$LEARN_FILE"
+      exit 0
+    fi
+    mark silence
+    if [ "$insert_mode" = "paste" ] && [ "$LEARNING" -eq 0 ] && [ "$CLIP_SAVED" -eq 0 ]; then
+      focus_query
+      mark focus
+      clip_save
+      mark clipboard-save
+    fi
+
+    wait "$TRANSCRIBE_PID"
+    TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
+    mark transcribe-wait
+  fi
   if [ -z "$TRANSCRIPTION" ] || [ "$TRANSCRIPTION" = "null" ]; then
     notify "Transcription failed (see xhisper --log)" 4000
     rm -f "$RECORDING" "$LEARN_FILE"
@@ -777,7 +839,17 @@ else
     notify "Say \"$word\", then press the key again" 3000
   fi
   indicator_show
-  pw-record --channels=1 --rate=16000 "$RECORDING" &
+  if [ "$backend" = assemblyai ] && command -v "$XHISPER_STREAM" >/dev/null 2>&1; then
+    # Stream to AssemblyAI while recording (also saves $RECORDING for a Groq fallback).
+    rm -f "$STREAM_TEXT"
+    prepare_log
+    export ASSEMBLYAI_API_KEY XHISPER_ASSEMBLYAI_API_KEY YTKB_ASSEMBLYAI_API_KEY
+    XHISPER_KEYTERMS=$(keyterms_json 2>/dev/null) \
+      "$XHISPER_STREAM" --wav "$RECORDING" --text "$STREAM_TEXT" --model "$assemblyai_model" \
+      2>> "$LOGFILE" &
+  else
+    pw-record --channels=1 --rate=16000 "$RECORDING" &
+  fi
   echo $! > "$REC_PID_FILE"
   wait $!
 fi

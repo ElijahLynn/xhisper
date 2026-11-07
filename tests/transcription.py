@@ -183,6 +183,8 @@ focus_query() { sleep 0.03; }
 clip_save() { sleep 0.04; }
 insert_mode=paste
 RECORDING=unused
+LEARNING=0
+CLIP_SAVED=0
 """ + marks + calls + '\nprintf "%s\\n" "$TIMING"\n'],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -159,6 +159,24 @@ Run `make check` for isolated diagnostic regression tests (no API key, network,
 or clipboard access). `make perf` is the separate offline application gate;
 `make perf-live` explicitly benchmarks live Groq requests.
 
+### Speech-to-text backends
+
+- **`groq`** (default): records to a file, then uploads it to Groq's Whisper when you
+  stop. Typically 150-300 ms after stop, but Groq's response time varies a lot.
+- **`assemblyai`**: `xhisper-stream` sends the audio to AssemblyAI's streaming API as
+  you speak, so only the last fraction of a second is left to finish when you stop
+  (measured: final text 13-67 ms after stop; key press to paste key ~110 ms in tests).
+  Your vocabulary is sent as AssemblyAI "keyterms" (up to 100). The recording is still
+  saved, and if streaming fails (no network, bad key) xhisper falls back to Groq.
+  Needs `python3` and an AssemblyAI key in `~/.env`:
+
+  ```sh
+  ASSEMBLYAI_API_KEY=your-key   # https://www.assemblyai.com/dashboard/api-keys
+  ```
+
+  A 1Password reference (`op://...`) works too, but is read on every dictation; if
+  1Password is locked or waiting for approval, that dictation falls back to Groq.
+
 ### Vocabulary
 
 Whisper gets a list of words to spell right with every dictation, built from three
@@ -205,6 +223,8 @@ mkdir -p ~/.config/xhisper && cp default_xhisperrc ~/.config/xhisper/xhisperrc
 | `indicator-color` | `red` | `red`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `white` |
 | `indicator-style` | `meter` | `meter` (animated level bars) or `orb` (pulsing orb) |
 | `transcription-prompt` | *(empty)* | Words to always spell right, comma-separated. See [Vocabulary](#vocabulary) |
+| `backend` | `groq` | `groq`: upload the recording when you stop. `assemblyai`: stream it to AssemblyAI while you talk, so the text is ready ~50 ms after stop. See [Speech-to-text backends](#speech-to-text-backends) |
+| `assemblyai-model` | `universal-3-5-pro` | AssemblyAI streaming model (`universal-3-6-pro`, `universal-3-5-pro`, `universal-streaming-english`, ...) |
 | `auto-vocab` | `on` | Also hint unusual words you type often (`xhisper-vocab`) |
 | `trailing-space` | `on` | Paste a space after each dictation |
 | `long-recording-threshold` | `1000` | Recordings longer than this many seconds use `whisper-large-v3` instead of turbo |

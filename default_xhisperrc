@@ -18,6 +18,8 @@ indicator-color : red      # red, orange, yellow, green, blue, purple, pink, whi
 indicator-style : meter    # meter (level bars) or orb (pulsing orb)
 
 # Transcription
+backend                  : groq   # groq, or assemblyai (streams while you talk; needs ASSEMBLYAI_API_KEY)
+assemblyai-model         : universal-3-5-pro
 transcription-prompt     : ""     # words you always want spelled right, comma-separated
 auto-vocab               : on     # also hint words you type often (xhisper-vocab)
 trailing-space           : on     # space after each dictation, so they don't run together

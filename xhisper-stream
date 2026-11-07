@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""xhisper-stream: record the microphone and transcribe it live with AssemblyAI's
+streaming API, so the text is ready almost as soon as you stop talking.
+
+xhisper starts this when you press the key (backend: assemblyai) and sends it SIGUSR1
+when you press it again. It then stops recording, asks AssemblyAI to finish the last
+turn, writes the transcript to --text and exits. The recording is always saved to
+--wav too, so xhisper can fall back to Groq if streaming fails; on failure no --text
+file is written.
+
+Standard library only (a small WebSocket client is built in).
+
+Environment:
+  ASSEMBLYAI_API_KEY      API key; an op:// 1Password reference is resolved with `op read`
+                          (XHISPER_ASSEMBLYAI_API_KEY and YTKB_ASSEMBLYAI_API_KEY also work)
+  XHISPER_KEYTERMS        JSON list of words to recognize (max 100), from xhisper's vocabulary
+  XHISPER_STREAM_URL      override the endpoint (tests)
+  XHISPER_RECORD_CMD      override the recorder command (tests); must write s16le 16 kHz mono
+"""
+
+import argparse
+import base64
+import json
+import os
+import shlex
+import signal
+import socket
+import ssl
+import subprocess
+import sys
+import threading
+import time
+import urllib.parse
+import wave
+
+RATE = 16000
+BYTES_PER_MS = RATE * 2 // 1000
+MIN_CHUNK = 50 * BYTES_PER_MS      # AssemblyAI accepts 50-1000 ms per message
+MAX_CHUNK = 1000 * BYTES_PER_MS
+FINAL_WAIT = 2.5                   # s to wait for the last turn after stop
+GRACE = 0.15                       # s to wait for late speech when no turn is open
+CONNECT_GRACE = 0.5                # s to still wait for the connection after stop
+
+
+def log(msg):
+    print(f"xhisper-stream: {msg}", file=sys.stderr, flush=True)
+
+
+# --- Minimal WebSocket client (RFC 6455) ---------------------------------------------
+class WebSocket:
+    def __init__(self, url, headers, timeout=5):
+        u = urllib.parse.urlsplit(url)
+        port = u.port or (443 if u.scheme == "wss" else 80)
+        sock = socket.create_connection((u.hostname, port), timeout=timeout)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        if u.scheme == "wss":
+            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=u.hostname)
+        self.sock, self.lock, self.buf = sock, threading.Lock(), b""
+        key = base64.b64encode(os.urandom(16)).decode()
+        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        lines = [f"GET {path} HTTP/1.1", f"Host: {u.hostname}", "Upgrade: websocket",
+                 "Connection: Upgrade", f"Sec-WebSocket-Key: {key}", "Sec-WebSocket-Version: 13"]
+        lines += [f"{k}: {v}" for k, v in headers.items()]
+        sock.sendall(("\r\n".join(lines) + "\r\n\r\n").encode())
+        while b"\r\n\r\n" not in self.buf:
+            data = sock.recv(4096)
+            if not data:
+                raise ConnectionError("connection closed during handshake")
+            self.buf += data
+        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
+        status = head.split(b"\r\n", 1)[0].decode(errors="replace")
+        if " 101 " not in status + " ":
+            raise ConnectionError(f"handshake failed: {status}")
+        sock.settimeout(None)
+
+    def send(self, payload, opcode):
+        mask = os.urandom(4)
+        n = len(payload)
+        head = bytes([0x80 | opcode])
+        if n < 126:
+            head += bytes([0x80 | n])
+        elif n < 65536:
+            head += bytes([0x80 | 126]) + n.to_bytes(2, "big")
+        else:
+            head += bytes([0x80 | 127]) + n.to_bytes(8, "big")
+        if n:
+            m = int.from_bytes((mask * (n // 4 + 1))[:n], "big")
+            payload = (int.from_bytes(payload, "big") ^ m).to_bytes(n, "big")
+        with self.lock:
+            self.sock.sendall(head + mask + payload)
+
+    def send_json(self, obj):
+        self.send(json.dumps(obj).encode(), 0x1)
+
+    def _read(self, n):
+        while len(self.buf) < n:
+            data = self.sock.recv(65536)
+            if not data:
+                raise ConnectionError("connection closed")
+            self.buf += data
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+    def recv(self):
+        """Next text/binary message, or None once the server closes."""
+        message, kind = b"", None
+        while True:
+            b0, b1 = self._read(2)
+            opcode, n = b0 & 0x0F, b1 & 0x7F
+            if n == 126:
+                n = int.from_bytes(self._read(2), "big")
+            elif n == 127:
+                n = int.from_bytes(self._read(8), "big")
+            mask = self._read(4) if b1 & 0x80 else None
+            data = self._read(n)
+            if mask:
+                data = bytes(c ^ mask[i % 4] for i, c in enumerate(data))
+            if opcode == 0x8:
+                return None
+            if opcode == 0x9:
+                self.send(data, 0xA)  # pong
+                continue
+            if opcode == 0xA:
+                continue
+            if opcode in (0x1, 0x2):
+                kind, message = opcode, data
+            else:  # continuation
+                message += data
+            if b0 & 0x80:
+                return message.decode() if kind == 0x1 else message
+
+    def close(self):
+        try:
+            self.send(b"\x03\xe8", 0x8)
+        except OSError:
+            pass
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+# --- Session -----------------------------------------------------------------------
+LOOKUPS = []  # running `op read` processes, killed if we give up on them
+
+
+def api_key():
+    for name in ("ASSEMBLYAI_API_KEY", "XHISPER_ASSEMBLYAI_API_KEY", "YTKB_ASSEMBLYAI_API_KEY"):
+        val = os.environ.get(name, "").strip()
+        if val.startswith("op://"):
+            env = {k: v for k, v in os.environ.items() if k != "OP_SERVICE_ACCOUNT_TOKEN"}
+            proc = subprocess.Popen(["op", "read", val], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, env=env)
+            LOOKUPS.append(proc)
+            out, err = proc.communicate(timeout=20)
+            val = out.strip()
+            if not val:
+                raise RuntimeError(f"could not read {name} from 1Password: {err.strip()[:200]}")
+        if val:
+            return val
+    raise RuntimeError("no AssemblyAI key: set ASSEMBLYAI_API_KEY (env or ~/.env)")
+
+
+class Session:
+    def __init__(self, args):
+        self.args = args
+        self.stop = threading.Event()        # SIGUSR1: the user pressed stop
+        self.ready = threading.Event()       # connected (or failed)
+        self.ended = threading.Event()       # final turn received after stop
+        self.ws, self.error = None, None
+        self.finals, self.open_turn = [], False
+        self.forced_at = None
+        self.cv = threading.Condition()
+        self.pending = bytearray()           # audio not yet sent
+        self.recorded_done = False
+
+    # Recording: pw-record -> WAV file + send buffer
+    def record(self):
+        cmd = shlex.split(os.environ.get("XHISPER_RECORD_CMD", "")) or [
+            "pw-record", "--raw", "--format", "s16", "--rate", str(RATE), "--channels", "1", "-"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        self.recorder = proc
+        with wave.open(self.args.wav, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
+            while True:
+                data = proc.stdout.read1(MIN_CHUNK) if hasattr(proc.stdout, "read1") else proc.stdout.read(MIN_CHUNK)
+                if not data:
+                    break
+                w.writeframes(data)
+                with self.cv:
+                    self.pending += data
+                    self.cv.notify_all()
+        proc.wait()
+        with self.cv:
+            self.recorded_done = True
+            self.cv.notify_all()
+
+    def stop_recording(self):
+        try:
+            self.recorder.send_signal(signal.SIGINT)  # pw-record flushes and exits
+        except (AttributeError, ProcessLookupError):
+            pass
+
+    def connect(self):
+        try:
+            params = {"sample_rate": RATE, "encoding": "pcm_s16le", "speech_model": self.args.model}
+            terms = json.loads(os.environ.get("XHISPER_KEYTERMS") or "[]")
+            if terms:
+                params["keyterms_prompt"] = json.dumps(terms[:100])
+            url = os.environ.get("XHISPER_STREAM_URL", "wss://streaming.assemblyai.com/v3/ws")
+            ws = WebSocket(f"{url}?{urllib.parse.urlencode(params)}", {"Authorization": api_key()})
+            first = json.loads(ws.recv() or "{}")
+            if first.get("type") != "Begin":
+                raise ConnectionError(f"session not started: {first}")
+            self.ws = ws
+        except Exception as e:  # noqa: BLE001 - any failure means "fall back to Groq"
+            self.error = e
+        finally:
+            self.ready.set()
+
+    def receive(self):
+        try:
+            while True:
+                raw = self.ws.recv()
+                if raw is None:
+                    break
+                m = json.loads(raw)
+                kind = m.get("type")
+                if kind == "Turn":
+                    with self.cv:
+                        if m.get("end_of_turn"):
+                            if m.get("transcript"):
+                                self.finals.append(m["transcript"])
+                            self.open_turn = False
+                            if self.forced_at is not None:
+                                self.ended.set()
+                        else:
+                            self.open_turn = bool(m.get("transcript"))
+                elif kind == "Termination":
+                    break
+                elif kind == "Error" or "error" in m:
+                    self.error = ConnectionError(str(m)); break
+        except (OSError, ConnectionError, ValueError) as e:
+            if not self.stop.is_set() or self.forced_at is None:
+                self.error = self.error or e
+        finally:
+            self.ended.set()
+
+    def send_audio(self):
+        """Send buffered audio in 50-1000 ms messages until recording ends."""
+        while True:
+            with self.cv:
+                while len(self.pending) < MIN_CHUNK and not self.recorded_done:
+                    self.cv.wait(0.1)
+                if not self.pending and self.recorded_done:
+                    return
+                n = min(len(self.pending), MAX_CHUNK)
+                if n < MIN_CHUNK:  # the last scrap: pad with silence to the minimum
+                    chunk = bytes(self.pending) + bytes(MIN_CHUNK - n)
+                else:
+                    chunk = bytes(self.pending[:n])
+                del self.pending[:n]
+            self.ws.send(chunk, 0x2)
+
+    def stream(self):
+        """Once connected, send audio continuously (backlog first) until recording ends."""
+        self.ready.wait()
+        if self.error or not self.ws:
+            return
+        threading.Thread(target=self.receive, daemon=True).start()
+        try:
+            self.send_audio()
+        except OSError as e:
+            self.error = self.error or e
+
+    def run(self):
+        signal.signal(signal.SIGUSR1, lambda *_: self.stop.set())
+        signal.signal(signal.SIGTERM, lambda *_: self.stop.set())
+        rec = threading.Thread(target=self.record, daemon=True); rec.start()
+        threading.Thread(target=self.connect, daemon=True).start()
+        sender = threading.Thread(target=self.stream, daemon=True); sender.start()
+        self.stop.wait()
+        self.stop_recording()
+        rec.join(3)
+        # Not connected by now (slow network, a 1Password prompt nobody answered)?
+        # Give up quickly so xhisper's Groq fallback still feels prompt.
+        if not self.ready.wait(CONNECT_GRACE):
+            self.error = self.error or TimeoutError(f"not connected {CONNECT_GRACE} s after stop")
+        if self.ws:
+            sender.join(5)
+        if self.error or not self.ws:
+            log(f"streaming failed: {self.error}")
+            return 2
+        try:
+            with self.cv:
+                self.forced_at = time.monotonic()
+            self.ws.send_json({"type": "ForceEndpoint"})
+            # A turn still open will be finalized; if none is open, only wait briefly
+            # in case the last words haven't produced a partial yet.
+            deadline = time.monotonic() + FINAL_WAIT
+            while not self.ended.wait(0.02):
+                with self.cv:
+                    idle = not self.open_turn and time.monotonic() - self.forced_at > GRACE
+                if idle or time.monotonic() > deadline:
+                    break
+        except OSError as e:
+            self.error = e
+        if self.error:
+            log(f"streaming failed: {self.error}")
+            return 2
+        text = " ".join(t.strip() for t in self.finals if t.strip())
+        tmp = f"{self.args.text}.tmp"
+        with open(tmp, "w") as f:
+            f.write(text)
+        os.replace(tmp, self.args.text)
+        try:
+            self.ws.send_json({"type": "Terminate"})
+        except OSError:
+            pass
+        self.ws.close()
+        return 0
+
+
+def set_process_name(name):
+    """Show up as NAME (not python3) in /proc/PID/comm, which is how xhisper finds a
+    running dictation when the key is pressed again."""
+    try:
+        import ctypes
+        ctypes.CDLL(None).prctl(15, name.encode(), 0, 0, 0)  # PR_SET_NAME
+    except (OSError, AttributeError):
+        pass
+
+
+def main():
+    set_process_name("xhisper-stream")
+    os.umask(0o077)  # the recording and transcript are private
+    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    p.add_argument("--wav", required=True, help="save the recording here")
+    p.add_argument("--text", required=True, help="write the transcript here")
+    p.add_argument("--model", default="universal-3-5-pro")
+    args = p.parse_args()
+    for path in (args.text, f"{args.text}.tmp"):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+    code = Session(args).run()
+    for proc in LOOKUPS:  # an unanswered 1Password prompt shouldn't outlive us
+        if proc.poll() is None:
+            proc.kill()
+    sys.exit(code)
+
+
+if __name__ == "__main__":
+    main()

@@ -17,12 +17,13 @@ xhisperclip: xhisperclip.c
 test: test.c
 	$(CC) $(CFLAGS) test.c -o test
 
-install: xhispertool xhisperclip xhisper.sh xhisper-vocab
+install: xhispertool xhisperclip xhisper.sh xhisper-vocab xhisper-stream
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 xhispertool $(DESTDIR)$(BINDIR)/xhispertool
 	ln -sf xhispertool $(DESTDIR)$(BINDIR)/xhispertoold
 	install -m 755 xhisperclip $(DESTDIR)$(BINDIR)/xhisperclip
 	install -m 755 xhisper-vocab $(DESTDIR)$(BINDIR)/xhisper-vocab
+	install -m 755 xhisper-stream $(DESTDIR)$(BINDIR)/xhisper-stream
 	install -m 755 xhisper.sh $(DESTDIR)$(BINDIR)/xhisper
 
 uninstall:
@@ -31,6 +32,7 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/xhispertoold
 	rm -f $(DESTDIR)$(BINDIR)/xhisperclip
 	rm -f $(DESTDIR)$(BINDIR)/xhisper-vocab
+	rm -f $(DESTDIR)$(BINDIR)/xhisper-stream
 
 clean:
 	rm -f xhispertool xhispertoold xhisperclip test
@@ -56,7 +58,10 @@ check:
 test-vocab:
 	bash tests/vocab.sh
 
+test-stream: xhisperclip
+	bash tests/stream.sh
+
 hooks:
 	git config core.hooksPath .githooks
 
-.PHONY: all install uninstall clean perf perf-live test-wayland check test-vocab hooks
+.PHONY: all install uninstall clean perf perf-live test-wayland check test-vocab test-stream hooks
