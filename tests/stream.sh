@@ -181,18 +181,21 @@ STUB
   check "e2e: stream failure logged" "stream_failed" \
     "$(grep '"backend":"assemblyai"' "$W/rt/xhisper.log" | tail -1 | jq -r .outcome)"
 
-  start_server empty
-  ms=$(e2e_ms)
-  check "e2e: empty stream with sound falls back to Groq (text pasted)" "yes" "$([ "$ms" != none ] && echo yes || echo no)"
-  check "e2e: no 'No speech detected' for a non-silent recording" "0" "$(grep -c 'No speech' "$W/notes" 2>/dev/null || echo 0)"
-
   # Messages: silence, sound without words, and a real failure each say so.
-  : > "$W/notes"; MIC=silent.py e2e_ms >/dev/null
-  check "e2e: silent recording says 'No sound detected'" "1" "$(grep -c 'No sound detected' "$W/notes")"
-  : > "$W/notes"; GROQ_STUB_TEXT="" e2e_ms >/dev/null
-  check "e2e: sound without words says 'No speech detected'" "1 0" \
-    "$(grep -c 'No speech detected' "$W/notes") $(grep -c 'Transcription failed' "$W/notes")"
+  # AssemblyAI heard no words in room noise: say so, and never ask Groq, which
+  # would invent text (the curl stand-in would paste "Groq fallback text.").
+  start_server empty
+  : > "$W/notes"; ms=$(e2e_ms)
+  check "e2e: stream, noise without words says 'No speech detected'" "1" "$(grep -c 'No speech detected' "$W/notes")"
+  check "e2e: stream, noise without words pastes nothing" "none" "$ms"
+  : > "$W/notes"; ms=$(MIC=silent.py e2e_ms)
+  check "e2e: stream, silence says 'No sound detected'" "1 none" "$(grep -c 'No sound detected' "$W/notes") $ms"
   kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null; SERVER=""
+  : > "$W/notes"; ms=$(MIC=silent.py e2e_ms)
+  check "e2e: Groq, silence says 'No sound detected'" "1 none" "$(grep -c 'No sound detected' "$W/notes") $ms"
+  : > "$W/notes"; ms=$(GROQ_STUB_TEXT="" e2e_ms)
+  check "e2e: Groq, sound without words says 'No speech detected'" "1 0 none" \
+    "$(grep -c 'No speech detected' "$W/notes") $(grep -c 'Transcription failed' "$W/notes") $ms"
   printf '#!/bin/bash\nprintf 000; exit 6\n' > "$W/bin/curl"
   : > "$W/notes"; e2e_ms >/dev/null
   check "e2e: real failure says 'Transcription failed'" "1" "$(grep -c 'Transcription failed' "$W/notes")"

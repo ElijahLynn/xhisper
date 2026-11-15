@@ -757,16 +757,13 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_i
       mark stream-wait
       log_stream_attempt "$([ -n "$TRANSCRIPTION" ] && echo success || echo empty_transcription)"
       if [ -z "$TRANSCRIPTION" ]; then
-        # Nothing back, but a short phrase can be missed by the stream: if the
-        # recording has sound, let Groq try it before giving up.
-        if ! is_silent "$RECORDING"; then
-          STREAMED=0
-          mark stream-empty
-        else
-          notify "No sound detected"
-          rm -f "$RECORDING" "$LEARN_FILE"
-          exit 0
-        fi
+        # Trust AssemblyAI's "no words": never hand the recording to Groq here.
+        # Whisper invents text from room noise and even pure silence ("GitHub",
+        # prompt words, "www.youtube.com"), with no_speech_prob still 0, so there
+        # is no way to tell its guesses from real speech.
+        is_silent "$RECORDING" && notify "No sound detected" || notify "No speech detected"
+        rm -f "$RECORDING" "$LEARN_FILE"
+        exit 0
       fi
     else
       log_stream_attempt stream_failed
