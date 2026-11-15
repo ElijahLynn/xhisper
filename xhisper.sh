@@ -656,7 +656,12 @@ transcribe() (
         first_byte_ms:($t[5] | reached | milliseconds),
         total_ms:($t[6] | milliseconds)
       }}' >> "$LOGFILE"
-  [ "$outcome" = success ] || return 1
+  # 3: Groq answered but heard no words (not a failure); 1: a real error.
+  case "$outcome" in
+    success) ;;
+    empty_transcription|prompt_echo) return 3 ;;
+    *) return 1 ;;
+  esac
   printf '%s\n' "$(apply_replacements "$transcription")"
 )
 
@@ -758,7 +763,7 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_i
           STREAMED=0
           mark stream-empty
         else
-          notify "No speech detected"
+          notify "No sound detected"
           rm -f "$RECORDING" "$LEARN_FILE"
           exit 0
         fi
@@ -797,9 +802,14 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_i
       mark clipboard-save
     fi
 
-    wait "$TRANSCRIBE_PID"
+    wait "$TRANSCRIBE_PID"; TRANSCRIBE_RC=$?
     TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
     mark transcribe-wait
+    if [ "$TRANSCRIBE_RC" -eq 3 ]; then  # sound, but no words in it
+      notify "No speech detected"
+      rm -f "$RECORDING" "$LEARN_FILE"
+      exit 0
+    fi
   fi
   if [ -z "$TRANSCRIPTION" ] || [ "$TRANSCRIPTION" = "null" ]; then
     notify "Transcription failed (see xhisper --log)" 4000

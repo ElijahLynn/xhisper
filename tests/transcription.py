@@ -75,7 +75,7 @@ transcribe "$1/audio.wav"
     def test_prompt_echo_is_not_a_transcription(self):
         result, record = self.run_case('{"text":" Claude, Warp, Strata, GitHub."}',
                                        prompt="Claude, Warp, Strata, GitHub, Groq")
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 3)  # no speech, not a failure
         self.assertEqual(result.stdout, "")
         self.assertEqual(record["outcome"], "prompt_echo")
 
@@ -105,8 +105,16 @@ transcribe "$1/audio.wav"
         for body in ('{"text":""}', '{"text":"   "}', '{"text":null}'):
             with self.subTest(body=body):
                 result, record = self.run_case(body)
-                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.returncode, 3)  # no speech, not a failure
                 self.assertEqual(record["outcome"], "empty_transcription")
+
+    def test_real_errors_are_failures_not_no_speech(self):
+        for args in (("", "000", 6, "Could not resolve host"),
+                     ('{"error":{"code":"rate_limit_exceeded"}}', "429"),
+                     ("<html>bad gateway</html>",)):
+            with self.subTest(args=args):
+                result, _ = self.run_case(*args)
+                self.assertEqual(result.returncode, 1)
 
     def test_rotation_and_bounded_error(self):
         result, record = self.run_case("", "000", 6, "x" * 2000, rotate=True)

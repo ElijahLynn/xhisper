@@ -20,6 +20,7 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 while True:
     sys.stdout.buffer.write(bytes(1600)); sys.stdout.buffer.flush(); time.sleep(0.05)
 EOF
+cp "$W/mic.py" "$W/silent.py"
 # The same, but with a little noise, so it counts as "heard sound".
 sed 's/bytes(1600)/bytes(b % 64 for b in __import__("os").urandom(1600))/' "$W/mic.py" > "$W/noisy.py"
 
@@ -133,10 +134,11 @@ if command -v Xvfb >/dev/null && command -v xclip >/dev/null; then
     "'dev.warp.Warp'" "'dev.warp.Warp.desktop'" "'x11'" > "$W/bin/gdbus"
   printf '#!/bin/bash\necho "$*" >> "%s/notes"\n' "$W" > "$W/bin/notify-send"
   # Groq stand-in for the fallback: answers like the transcription API.
+  # GROQ_STUB_TEXT sets what it "heard" (empty: no words).
   cat > "$W/bin/curl" <<'STUB'
 #!/bin/bash
 while [ "$#" -gt 0 ]; do
-  case "$1" in --output) printf '%s' '{"text":" Groq fallback text."}' > "$2"; shift 2 ;; *) shift ;; esac
+  case "$1" in --output) jq -nc --arg t "${GROQ_STUB_TEXT- Groq fallback text.}" '{text:$t}' > "$2"; shift 2 ;; *) shift ;; esac
 done
 printf '200'
 STUB
@@ -151,7 +153,7 @@ STUB
       XHISPER_TOOL_OVERRIDE=1 XHISPERTOOL="$W/bin/xhispertool" XHISPERCLIP="$REPO/xhisperclip" \
       XHISPER_STREAM="$REPO/xhisper-stream" XHISPER_VOCAB=true \
       XDG_CONFIG_HOME="$W/cfg" XDG_CACHE_HOME="$W/cache" ASSEMBLYAI_API_KEY=test-key \
-      XHISPER_STREAM_URL="ws://127.0.0.1:$PORT/v3/ws" XHISPER_RECORD_CMD="python3 $W/mic.py" \
+      XHISPER_STREAM_URL="ws://127.0.0.1:$PORT/v3/ws" XHISPER_RECORD_CMD="python3 $W/${MIC:-mic.py}" \
       timeout 15 bash "$REPO/xhisper.sh" >/dev/null 2>&1
   }
   e2e_ms() {
@@ -183,6 +185,17 @@ STUB
   ms=$(e2e_ms)
   check "e2e: empty stream with sound falls back to Groq (text pasted)" "yes" "$([ "$ms" != none ] && echo yes || echo no)"
   check "e2e: no 'No speech detected' for a non-silent recording" "0" "$(grep -c 'No speech' "$W/notes" 2>/dev/null || echo 0)"
+
+  # Messages: silence, sound without words, and a real failure each say so.
+  : > "$W/notes"; MIC=silent.py e2e_ms >/dev/null
+  check "e2e: silent recording says 'No sound detected'" "1" "$(grep -c 'No sound detected' "$W/notes")"
+  : > "$W/notes"; GROQ_STUB_TEXT="" e2e_ms >/dev/null
+  check "e2e: sound without words says 'No speech detected'" "1 0" \
+    "$(grep -c 'No speech detected' "$W/notes") $(grep -c 'Transcription failed' "$W/notes")"
+  kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null; SERVER=""
+  printf '#!/bin/bash\nprintf 000; exit 6\n' > "$W/bin/curl"
+  : > "$W/notes"; e2e_ms >/dev/null
+  check "e2e: real failure says 'Transcription failed'" "1" "$(grep -c 'Transcription failed' "$W/notes")"
   kill $XVFB 2>/dev/null
 else
   echo "skip e2e: needs Xvfb and xclip"
