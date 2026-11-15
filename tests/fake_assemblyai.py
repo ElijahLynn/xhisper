@@ -5,8 +5,10 @@ header, sends Begin, a partial Turn once audio arrives, and on ForceEndpoint a f
 Turn saying how much audio it received and which keyterms it was given. Writes a
 line per session to LOG. usage: python3 fake_assemblyai.py PORT LOG [MODE]
 MODE: ok (default) | reject (refuse the key) | silent (never finalizes a turn)
+      | late (no partial; the final turn comes 0.4 s after ForceEndpoint, like a short
+        phrase the server hasn't caught up with) | empty (final turn with no text)
 """
-import base64, hashlib, json, socket, sys, threading, urllib.parse
+import base64, hashlib, json, socket, sys, threading, time, urllib.parse
 
 PORT, LOG = int(sys.argv[1]), sys.argv[2]
 MODE = sys.argv[3] if len(sys.argv) > 3 else "ok"
@@ -68,11 +70,15 @@ def handle(conn):
             break
         if op == 0x2:
             audio += len(data)
-            if not partial_sent and MODE != "silent":
+            if not partial_sent and MODE not in ("silent", "late", "empty"):
                 send({"type": "Turn", "end_of_turn": False, "transcript": "hello"}); partial_sent = True
         elif op == 0x1:
             msg = json.loads(data)
-            if msg["type"] == "ForceEndpoint" and MODE != "silent":
+            if msg["type"] == "ForceEndpoint" and MODE == "empty":
+                send({"type": "Turn", "end_of_turn": True, "transcript": ""})
+            elif msg["type"] == "ForceEndpoint" and MODE != "silent":
+                if MODE == "late":
+                    time.sleep(0.4)
                 send({"type": "Turn", "end_of_turn": True,
                       "transcript": f"Got {audio // 32} ms; terms {','.join(terms)}."})
             elif msg["type"] == "Terminate":

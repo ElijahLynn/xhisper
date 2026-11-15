@@ -20,6 +20,8 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 while True:
     sys.stdout.buffer.write(bytes(1600)); sys.stdout.buffer.flush(); time.sleep(0.05)
 EOF
+# The same, but with a little noise, so it counts as "heard sound".
+sed 's/bytes(1600)/bytes(b % 64 for b in __import__("os").urandom(1600))/' "$W/mic.py" > "$W/noisy.py"
 
 PORT=$(( 20000 + RANDOM % 20000 ))
 start_server() {  # mode
@@ -32,7 +34,7 @@ start_server() {  # mode
 dictate() {
   rm -f "$W/out.txt" "$W/out.wav"
   env ASSEMBLYAI_API_KEY="${KEY:-test-key}" XHISPER_STREAM_URL="ws://127.0.0.1:$PORT/v3/ws" \
-      XHISPER_RECORD_CMD="python3 $W/mic.py" XHISPER_KEYTERMS='["Claude","XWayland"]' \
+      XHISPER_RECORD_CMD="python3 $W/${MIC:-mic.py}" XHISPER_KEYTERMS='["Claude","XWayland"]' \
       python3 "$REPO/xhisper-stream" --wav "$W/out.wav" --text "$W/out.txt" --model universal-3-5-pro \
       2>>"$W/stderr" &
   local pid=$!
@@ -58,6 +60,20 @@ start_server silent
 read -r rc ms < <(dictate 0.5)
 check "no speech: empty transcript, quick exit" "0 empty" "$rc $( [ -s "$W/out.txt" ] && echo text || echo empty)"
 check "no speech: exits within 500 ms" "yes" "$([ "$ms" -lt 500 ] && echo yes || echo "no: $ms ms")"
+
+# A short phrase: sound recorded, but no partial yet when stop is pressed.
+start_server late
+before=$(wc -l < "$W/stderr")
+read -r rc ms < <(MIC=noisy.py dictate 0.5)
+check "short phrase, late reply: transcript kept" "0 text" "$rc $( [ -s "$W/out.txt" ] && echo text || echo empty)"
+check "short phrase: still under 1.2 s" "yes" "$([ "$ms" -lt 1200 ] && echo yes || echo "no: $ms ms")"
+check "short phrase: no empty-transcript diagnostic" "0" "$(tail -n +$((before + 1)) "$W/stderr" | grep -c 'empty transcript')"
+
+start_server empty
+before=$(wc -l < "$W/stderr")
+read -r rc ms < <(MIC=noisy.py dictate 0.5)
+check "empty reply: diagnostic logged" "1" "$(tail -n +$((before + 1)) "$W/stderr" | grep -c 'empty transcript: audio')"
+check "empty reply: diagnostic has no transcript text" "0" "$(grep -c 'Got ' "$W/stderr")"
 
 start_server ok
 KEY=wrong read -r rc ms < <(KEY=wrong dictate 0.5)
@@ -162,6 +178,11 @@ STUB
   check "e2e: fallback transcription logged" "success" "$(grep '"curl_exit"' "$W/rt/xhisper.log" | tail -1 | jq -r .outcome)"
   check "e2e: stream failure logged" "stream_failed" \
     "$(grep '"backend":"assemblyai"' "$W/rt/xhisper.log" | tail -1 | jq -r .outcome)"
+
+  start_server empty
+  ms=$(e2e_ms)
+  check "e2e: empty stream with sound falls back to Groq (text pasted)" "yes" "$([ "$ms" != none ] && echo yes || echo no)"
+  check "e2e: no 'No speech detected' for a non-silent recording" "0" "$(grep -c 'No speech' "$W/notes" 2>/dev/null || echo 0)"
   kill $XVFB 2>/dev/null
 else
   echo "skip e2e: needs Xvfb and xclip"

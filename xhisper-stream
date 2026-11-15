@@ -17,12 +17,15 @@ Environment:
   XHISPER_KEYTERMS        JSON list of words to recognize (max 100), from xhisper's vocabulary
   XHISPER_STREAM_URL      override the endpoint (tests)
   XHISPER_RECORD_CMD      override the recorder command (tests); must write s16le 16 kHz mono
+  XHISPER_SILENCE_DB      peak level (dBFS) below which the microphone heard nothing (-50)
 """
 
 import argparse
+import array
 import base64
 import fcntl
 import json
+import math
 import os
 import shlex
 import signal
@@ -42,6 +45,8 @@ MIN_CHUNK = 50 * BYTES_PER_MS      # AssemblyAI accepts 50-1000 ms per message
 MAX_CHUNK = 1000 * BYTES_PER_MS
 FINAL_WAIT = 2.5                   # s to wait for the last turn after stop
 GRACE = 0.15                       # s to wait for late speech when no turn is open
+SPEECH_GRACE = 0.8                 # s to wait instead when the mic heard sound but no
+                                   # words have come back yet (a short, quick phrase)
 CONNECT_GRACE = 0.5                # s to still wait for the connection after stop
 
 
@@ -250,6 +255,8 @@ class Session:
         self.cv = threading.Condition()
         self.pending = bytearray()           # audio not yet sent
         self.recorded_done = False
+        self.peak = 0                        # loudest sample recorded
+        self.partials = 0                    # partial turns with text received
 
     # Recording: pw-record -> WAV file + send buffer
     def record(self):
@@ -264,6 +271,9 @@ class Session:
                 if not data:
                     break
                 w.writeframes(data)
+                samples = array.array("h", data[: len(data) // 2 * 2])
+                if samples:
+                    self.peak = max(self.peak, max(samples), -min(samples))
                 with self.cv:
                     self.pending += data
                     self.cv.notify_all()
@@ -271,6 +281,16 @@ class Session:
         with self.cv:
             self.recorded_done = True
             self.cv.notify_all()
+
+    def peak_db(self):
+        return 20 * math.log10(self.peak / 32768) if self.peak else -200.0
+
+    @staticmethod
+    def silence_db():
+        try:
+            return float(os.environ.get("XHISPER_SILENCE_DB", "-50"))
+        except ValueError:
+            return -50.0
 
     def stop_recording(self):
         try:
@@ -316,6 +336,7 @@ class Session:
                                 self.ended.set()
                         else:
                             self.open_turn = bool(m.get("transcript"))
+                            self.partials += self.open_turn
                 elif kind == "Termination":
                     break
                 elif kind == "Error" or "error" in m:
@@ -376,11 +397,15 @@ class Session:
                 self.forced_at = time.monotonic()
             self.ws.send_json({"type": "ForceEndpoint"})
             # A turn still open will be finalized; if none is open, only wait briefly
-            # in case the last words haven't produced a partial yet.
+            # in case the last words haven't produced a partial yet. A short phrase can
+            # be all "last words": if the mic heard sound but nothing has come back,
+            # wait longer, or the dictation is lost as "No speech detected".
+            heard_sound = self.peak_db() >= self.silence_db()
+            grace = SPEECH_GRACE if heard_sound and not self.finals and not self.partials else GRACE
             deadline = time.monotonic() + FINAL_WAIT
             while not self.ended.wait(0.02):
                 with self.cv:
-                    idle = not self.open_turn and time.monotonic() - self.forced_at > GRACE
+                    idle = not self.open_turn and time.monotonic() - self.forced_at > grace
                 if idle or time.monotonic() > deadline:
                     break
         except OSError as e:
@@ -389,6 +414,10 @@ class Session:
             log(f"streaming failed: {self.error}")
             return 2
         text = " ".join(t.strip() for t in self.finals if t.strip())
+        if not text:  # diagnostics only, never transcript text
+            audio_ms = (os.path.getsize(self.args.wav) - 44) // BYTES_PER_MS if os.path.exists(self.args.wav) else 0
+            log(f"empty transcript: audio {audio_ms} ms, peak {self.peak_db():.0f} dBFS, "
+                f"partials {self.partials}, waited {time.monotonic() - self.forced_at:.2f} s")
         tmp = f"{self.args.text}.tmp"
         with open(tmp, "w") as f:
             f.write(text)

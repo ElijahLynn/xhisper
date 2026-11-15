@@ -752,9 +752,16 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_i
       mark stream-wait
       log_stream_attempt "$([ -n "$TRANSCRIPTION" ] && echo success || echo empty_transcription)"
       if [ -z "$TRANSCRIPTION" ]; then
-        notify "No speech detected"
-        rm -f "$RECORDING" "$LEARN_FILE"
-        exit 0
+        # Nothing back, but a short phrase can be missed by the stream: if the
+        # recording has sound, let Groq try it before giving up.
+        if ! is_silent "$RECORDING"; then
+          STREAMED=0
+          mark stream-empty
+        else
+          notify "No speech detected"
+          rm -f "$RECORDING" "$LEARN_FILE"
+          exit 0
+        fi
       fi
     else
       log_stream_attempt stream_failed
@@ -844,7 +851,7 @@ else
     rm -f "$STREAM_TEXT"
     prepare_log
     export ASSEMBLYAI_API_KEY XHISPER_ASSEMBLYAI_API_KEY YTKB_ASSEMBLYAI_API_KEY
-    XHISPER_KEYTERMS=$(keyterms_json 2>/dev/null) \
+    XHISPER_KEYTERMS=$(keyterms_json 2>/dev/null) XHISPER_SILENCE_DB="$silence_threshold" \
       "$XHISPER_STREAM" --wav "$RECORDING" --text "$STREAM_TEXT" --model "$assemblyai_model" \
       2>> "$LOGFILE" &
   else
