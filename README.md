@@ -114,10 +114,10 @@ a binding such as `binding='<Super><Shift>d'` and `action='/usr/local/bin/xhispe
 2. Talk.
 3. Press it again: the transcription is pasted at your cursor.
 
-Silent recordings are ignored with a "No sound detected" notification, and
-recordings with sound but no words in them (a cough, background noise) with "No
-speech detected". "Transcription failed" means a real error, such as no network or
-an API problem; `xhisper --log` shows which.
+A press you don't speak into does nothing. A silent recording shows "No sound
+detected", which usually means a muted or wrong microphone. "Transcription failed"
+means a real error, such as no network or an API problem; `xhisper --log` shows
+which.
 
 Each dictation ends with a space, so the next one doesn't run into it
 (`trailing-space : off` to disable).

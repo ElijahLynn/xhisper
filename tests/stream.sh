@@ -23,6 +23,20 @@ EOF
 cp "$W/mic.py" "$W/silent.py"
 # The same, but with a little noise, so it counts as "heard sound".
 sed 's/bytes(1600)/bytes(b % 64 for b in __import__("os").urandom(1600))/' "$W/mic.py" > "$W/noisy.py"
+# Room noise (about -45 dBFS), and room noise for 0.25 s then speech (about -12 dBFS).
+cat > "$W/levels.py" <<'MIC'
+import array, random, signal, sys, time
+signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+speak_after = float(sys.argv[1]) if len(sys.argv) > 1 else None
+start = time.monotonic()
+while True:
+    talking = speak_after is not None and time.monotonic() - start >= speak_after
+    amp = 8000 if talking else 180
+    sys.stdout.buffer.write(array.array("h", (random.randint(-amp, amp) for _ in range(800))).tobytes())
+    sys.stdout.buffer.flush(); time.sleep(0.05)
+MIC
+printf 'import runpy, sys; sys.argv = ["levels.py"]; runpy.run_path("%s/levels.py", run_name="__main__")\n' "$W" > "$W/room.py"
+printf 'import runpy, sys; sys.argv = ["levels.py", "0.25"]; runpy.run_path("%s/levels.py", run_name="__main__")\n' "$W" > "$W/speak.py"
 
 PORT=$(( 20000 + RANDOM % 20000 ))
 start_server() {  # mode
@@ -65,10 +79,22 @@ check "no speech: exits within 500 ms" "yes" "$([ "$ms" -lt 500 ] && echo yes ||
 # A short phrase: sound recorded, but no partial yet when stop is pressed.
 start_server late
 before=$(wc -l < "$W/stderr")
-read -r rc ms < <(MIC=noisy.py dictate 0.5)
+read -r rc ms < <(MIC=speak.py dictate 0.6)
 check "short phrase, late reply: transcript kept" "0 text" "$rc $( [ -s "$W/out.txt" ] && echo text || echo empty)"
 check "short phrase: still under 1.2 s" "yes" "$([ "$ms" -lt 1200 ] && echo yes || echo "no: $ms ms")"
 check "short phrase: no empty-transcript diagnostic" "0" "$(tail -n +$((before + 1)) "$W/stderr" | grep -c 'empty transcript')"
+
+# The reported cut-off: a first turn is already final, then "it works though" just
+# before stop, with no partial for it yet. Its words must not be dropped.
+start_server tail
+read -r rc ms < <(MIC=speak.py dictate 1)
+check "last words after a finished turn are kept" "First part. it works though." "$(cat "$W/out.txt" 2>/dev/null)"
+
+# A press you don't speak into, in a noisy room (the server never answers, like
+# AssemblyAI on silence): nothing to wait for, so quick.
+start_server silent
+read -r rc ms < <(MIC=room.py dictate 0.6)
+check "room noise only: exits within 400 ms" "yes" "$([ "$ms" -lt 400 ] && echo yes || echo "no: $ms ms")"
 
 start_server empty
 before=$(wc -l < "$W/stderr")
@@ -186,7 +212,7 @@ STUB
   # would invent text (the curl stand-in would paste "Groq fallback text.").
   start_server empty
   : > "$W/notes"; ms=$(e2e_ms)
-  check "e2e: stream, noise without words says 'No speech detected'" "1" "$(grep -c 'No speech detected' "$W/notes")"
+  check "e2e: stream, noise without words: no toast" "0" "$(grep -c . "$W/notes")"
   check "e2e: stream, noise without words pastes nothing" "none" "$ms"
   : > "$W/notes"; ms=$(MIC=silent.py e2e_ms)
   check "e2e: stream, silence says 'No sound detected'" "1 none" "$(grep -c 'No sound detected' "$W/notes") $ms"
@@ -194,8 +220,7 @@ STUB
   : > "$W/notes"; ms=$(MIC=silent.py e2e_ms)
   check "e2e: Groq, silence says 'No sound detected'" "1 none" "$(grep -c 'No sound detected' "$W/notes") $ms"
   : > "$W/notes"; ms=$(GROQ_STUB_TEXT="" e2e_ms)
-  check "e2e: Groq, sound without words says 'No speech detected'" "1 0 none" \
-    "$(grep -c 'No speech detected' "$W/notes") $(grep -c 'Transcription failed' "$W/notes") $ms"
+  check "e2e: Groq, sound without words: no toast, nothing pasted" "0 none" "$(grep -c . "$W/notes") $ms"
   printf '#!/bin/bash\nprintf 000; exit 6\n' > "$W/bin/curl"
   : > "$W/notes"; e2e_ms >/dev/null
   check "e2e: real failure says 'Transcription failed'" "1" "$(grep -c 'Transcription failed' "$W/notes")"

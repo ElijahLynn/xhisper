@@ -45,8 +45,10 @@ MIN_CHUNK = 50 * BYTES_PER_MS      # AssemblyAI accepts 50-1000 ms per message
 MAX_CHUNK = 1000 * BYTES_PER_MS
 FINAL_WAIT = 2.5                   # s to wait for the last turn after stop
 GRACE = 0.15                       # s to wait for late speech when no turn is open
-SPEECH_GRACE = 0.8                 # s to wait instead when the mic heard sound but no
-                                   # words have come back yet (a short, quick phrase)
+SPEECH_GRACE = 1.0                 # s to wait instead when speech was recorded after the
+                                   # last word AssemblyAI returned (words still in flight)
+SPEECH_OVER_FLOOR = 15             # dB above the room's noise floor that counts as speech
+WORD_MARGIN_MS = 150               # audio this soon after the last word belongs to it
 CONNECT_GRACE = 0.5                # s to still wait for the connection after stop
 
 
@@ -257,6 +259,10 @@ class Session:
         self.recorded_done = False
         self.peak = 0                        # loudest sample recorded
         self.partials = 0                    # partial turns with text received
+        self.levels = []                     # (audio ms at end of chunk, chunk peak dBFS)
+        self.audio_bytes = 0
+        self.heard_until = 0                 # audio ms where the last returned word ends
+        self.word_times = False              # the server sends word timings
 
     # Recording: pw-record -> WAV file + send buffer
     def record(self):
@@ -272,8 +278,11 @@ class Session:
                     break
                 w.writeframes(data)
                 samples = array.array("h", data[: len(data) // 2 * 2])
+                self.audio_bytes += len(data)
                 if samples:
-                    self.peak = max(self.peak, max(samples), -min(samples))
+                    chunk_peak = max(max(samples), -min(samples))
+                    self.peak = max(self.peak, chunk_peak)
+                    self.levels.append((self.audio_bytes // BYTES_PER_MS, to_db(chunk_peak)))
                 with self.cv:
                     self.pending += data
                     self.cv.notify_all()
@@ -283,7 +292,20 @@ class Session:
             self.cv.notify_all()
 
     def peak_db(self):
-        return 20 * math.log10(self.peak / 32768) if self.peak else -200.0
+        return to_db(self.peak)
+
+    def speech_after_last_word(self):
+        """Is there speech in the recording after the last word AssemblyAI returned?
+        Speech is SPEECH_OVER_FLOOR dB above the room's noise floor (the quieter end
+        of the recording), so room noise alone never counts, however loud the room."""
+        if not self.levels:
+            return False
+        if (self.finals or self.partials) and not self.word_times:
+            return False  # no word timings to compare against: keep the old behavior
+        quiet = sorted(db for _, db in self.levels)[len(self.levels) // 10]
+        loud = max(min(quiet, -35.0) + SPEECH_OVER_FLOOR, self.silence_db())
+        return any(ms > self.heard_until + WORD_MARGIN_MS and db >= loud
+                   for ms, db in self.levels)
 
     @staticmethod
     def silence_db():
@@ -328,6 +350,11 @@ class Session:
                 kind = m.get("type")
                 if kind == "Turn":
                     with self.cv:
+                        ends = [w.get("end") for w in m.get("words") or []
+                                if isinstance(w, dict) and isinstance(w.get("end"), (int, float))]
+                        if ends:
+                            self.word_times = True
+                            self.heard_until = max(self.heard_until, max(ends))
                         if m.get("end_of_turn"):
                             if m.get("transcript"):
                                 self.finals.append(m["transcript"])
@@ -392,16 +419,18 @@ class Session:
         if self.error or not self.ws:
             log(f"streaming failed: {self.error}")
             return 2
+        words_due, heard_before = False, 0
         try:
             with self.cv:
                 self.forced_at = time.monotonic()
             self.ws.send_json({"type": "ForceEndpoint"})
-            # A turn still open will be finalized; if none is open, only wait briefly
-            # in case the last words haven't produced a partial yet. A short phrase can
-            # be all "last words": if the mic heard sound but nothing has come back,
-            # wait longer, or the dictation is lost as "No speech detected".
-            heard_sound = self.peak_db() >= self.silence_db()
-            grace = SPEECH_GRACE if heard_sound and not self.finals and not self.partials else GRACE
+            # A turn still open will be finalized. If none is open, the last words
+            # may not have produced a partial yet: a quick "it works though" after a
+            # pause, or a whole short phrase. Wait for them when the recording has
+            # speech after the last word returned; otherwise exit almost at once.
+            words_due = self.speech_after_last_word()
+            heard_before = self.heard_until
+            grace = SPEECH_GRACE if words_due else GRACE
             deadline = time.monotonic() + FINAL_WAIT
             while not self.ended.wait(0.02):
                 with self.cv:
@@ -414,6 +443,9 @@ class Session:
             log(f"streaming failed: {self.error}")
             return 2
         text = " ".join(t.strip() for t in self.finals if t.strip())
+        if words_due:  # diagnostics only, never transcript text
+            log(f"waited for words after the last one: {time.monotonic() - self.forced_at:.2f} s, "
+                f"{'got them' if self.heard_until > heard_before else 'none came'}")
         if not text:  # diagnostics only, never transcript text
             audio_ms = (os.path.getsize(self.args.wav) - 44) // BYTES_PER_MS if os.path.exists(self.args.wav) else 0
             log(f"empty transcript: audio {audio_ms} ms, peak {self.peak_db():.0f} dBFS, "
@@ -428,6 +460,10 @@ class Session:
             pass
         self.ws.close()
         return 0
+
+
+def to_db(peak):
+    return 20 * math.log10(peak / 32768) if peak else -200.0
 
 
 def set_process_name(name):

@@ -761,7 +761,9 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_i
         # Whisper invents text from room noise and even pure silence ("GitHub",
         # prompt words, "www.youtube.com"), with no_speech_prob still 0, so there
         # is no way to tell its guesses from real speech.
-        is_silent "$RECORDING" && notify "No sound detected" || notify "No speech detected"
+        # No toast for "no words" (a press you didn't speak into should do nothing),
+        # only for silence, which usually means a muted or wrong microphone.
+        is_silent "$RECORDING" && notify "No sound detected"
         rm -f "$RECORDING" "$LEARN_FILE"
         exit 0
       fi
@@ -802,8 +804,7 @@ if REC_PID=$(read_pid "$REC_PID_FILE") && { pid_is "$REC_PID" pw-record || pid_i
     wait "$TRANSCRIBE_PID"; TRANSCRIBE_RC=$?
     TRANSCRIPTION=$(cat "$TRANSCRIPT_FILE"); rm -f "$TRANSCRIPT_FILE"
     mark transcribe-wait
-    if [ "$TRANSCRIBE_RC" -eq 3 ]; then  # sound, but no words in it
-      notify "No speech detected"
+    if [ "$TRANSCRIBE_RC" -eq 3 ]; then  # sound, but no words in it: quietly nothing
       rm -f "$RECORDING" "$LEARN_FILE"
       exit 0
     fi

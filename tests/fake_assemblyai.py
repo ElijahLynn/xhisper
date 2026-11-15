@@ -7,6 +7,9 @@ line per session to LOG. usage: python3 fake_assemblyai.py PORT LOG [MODE]
 MODE: ok (default) | reject (refuse the key) | silent (never finalizes a turn)
       | late (no partial; the final turn comes 0.4 s after ForceEndpoint, like a short
         phrase the server hasn't caught up with) | empty (final turn with no text)
+      | tail (a first turn is final after 300 ms of audio; the last words come only
+        0.4 s after ForceEndpoint, like "it works though" said just before stop)
+Turns carry word timings ("words" with "end" in audio ms), like the real API.
 """
 import base64, hashlib, json, socket, sys, threading, time, urllib.parse
 
@@ -61,7 +64,8 @@ def handle(conn):
     if MODE == "reject" or hdr.get("authorization") != "test-key":
         send({"type": "Error", "error": "Unauthorized Connection"}); conn.close(); return
     send({"type": "Begin", "id": "fake"})
-    audio, partial_sent = 0, False
+    audio, partial_sent, first_final = 0, False, False
+    words = lambda end: [{"text": "w", "start": max(end - 200, 0), "end": end, "word_is_final": True}]
     terms = json.loads(query.get("keyterms_prompt", ["[]"])[0])
     while True:
         try:
@@ -70,17 +74,22 @@ def handle(conn):
             break
         if op == 0x2:
             audio += len(data)
-            if not partial_sent and MODE not in ("silent", "late", "empty"):
-                send({"type": "Turn", "end_of_turn": False, "transcript": "hello"}); partial_sent = True
+            if MODE == "tail":
+                if not first_final and audio // 32 >= 300:
+                    send({"type": "Turn", "end_of_turn": True, "transcript": "First part.",
+                          "words": words(audio // 32 - 50)}); first_final = True
+            elif not partial_sent and MODE not in ("silent", "late", "empty"):
+                send({"type": "Turn", "end_of_turn": False, "transcript": "hello",
+                      "words": words(audio // 32)}); partial_sent = True
         elif op == 0x1:
             msg = json.loads(data)
             if msg["type"] == "ForceEndpoint" and MODE == "empty":
                 send({"type": "Turn", "end_of_turn": True, "transcript": ""})
             elif msg["type"] == "ForceEndpoint" and MODE != "silent":
-                if MODE == "late":
+                if MODE in ("late", "tail"):
                     time.sleep(0.4)
-                send({"type": "Turn", "end_of_turn": True,
-                      "transcript": f"Got {audio // 32} ms; terms {','.join(terms)}."})
+                text = "it works though." if MODE == "tail" else f"Got {audio // 32} ms; terms {','.join(terms)}."
+                send({"type": "Turn", "end_of_turn": True, "transcript": text, "words": words(audio // 32)})
             elif msg["type"] == "Terminate":
                 send({"type": "Termination"}); break
         elif op == 0x8:
